@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { AUTH_KEY, USER_KEY } from "../lib/admin-store";
 import styles from "./admin-shell.module.css";
 
@@ -16,34 +16,60 @@ type NavItem = {
   label: string;
 };
 
+const DEFAULT_ADMIN_NAME = "admin@lfcjahi.com";
+
+function subscribeStorage(callback: () => void): () => void {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getAuthClientSnapshot(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(AUTH_KEY) === "true";
+}
+
+function getAuthServerSnapshot(): boolean {
+  return false;
+}
+
+function getAdminNameClientSnapshot(): string {
+  if (typeof window === "undefined") {
+    return DEFAULT_ADMIN_NAME;
+  }
+
+  return window.localStorage.getItem(USER_KEY) || DEFAULT_ADMIN_NAME;
+}
+
+function getAdminNameServerSnapshot(): string {
+  return DEFAULT_ADMIN_NAME;
+}
+
 const navItems: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/media-library", label: "Media Library" },
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/events", label: "Events" },
-  { href: "/admin/theme-settings", label: "Theme Settings" },
+  // { href: "/admin/theme-settings", label: "Theme Settings" },
 ];
 
 export default function AdminShell({ title, children }: AdminShellProps) {
   const router = useRouter();
   const pathname = usePathname();
-
-  const [isReady] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return window.localStorage.getItem(AUTH_KEY) === "true";
-  });
+  const isReady = useSyncExternalStore(subscribeStorage, getAuthClientSnapshot, getAuthServerSnapshot);
+  const adminName = useSyncExternalStore(
+    subscribeStorage,
+    getAdminNameClientSnapshot,
+    getAdminNameServerSnapshot,
+  );
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [adminName] = useState(() => {
-    if (typeof window === "undefined") {
-      return "admin@lfcjahi.com";
-    }
-
-    return window.localStorage.getItem(USER_KEY) || "admin@lfcjahi.com";
-  });
 
   useEffect(() => {
     if (!isReady) {

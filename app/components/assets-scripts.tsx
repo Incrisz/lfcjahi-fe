@@ -15,8 +15,17 @@ const coreScripts = [
 ] as const;
 
 export default function AssetsScripts({ pageScript }: AssetsScriptsProps) {
+  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
+
   return (
     <>
+      <Script
+        id="lfc-api-base-url"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `window.lfcApiBaseUrl = ${JSON.stringify(apiBaseUrl)};`,
+        }}
+      />
       {coreScripts.map((scriptName) => (
         <Script
           key={scriptName}

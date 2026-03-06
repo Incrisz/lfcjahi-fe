@@ -4,6 +4,11 @@ type ApiEnvelope<T> = {
   data: T;
 };
 
+type ApiErrorPayload = {
+  message?: string;
+  errors?: Record<string, string[]>;
+};
+
 function getApiBaseUrl(): string | null {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 
@@ -24,12 +29,23 @@ function buildApiUrl(path: string): string | null {
 }
 
 async function parseEnvelope<T>(response: Response): Promise<T> {
+  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | ApiErrorPayload | null;
+
   if (!response.ok) {
-    throw new Error(`API request failed with status ${response.status}`);
+    const fallback = `API request failed with status ${response.status}`;
+    const message = payload && "message" in payload && payload.message ? payload.message : fallback;
+    const errors =
+      payload && "errors" in payload && payload.errors
+        ? Object.values(payload.errors)
+            .flat()
+            .filter(Boolean)
+            .join(" ")
+        : "";
+
+    throw new Error(errors ? `${message} ${errors}`.trim() : message);
   }
 
-  const payload = (await response.json()) as ApiEnvelope<T>;
-  return payload.data;
+  return ((payload as ApiEnvelope<T> | null)?.data ?? null) as T;
 }
 
 export function hasApiBaseUrl(): boolean {
@@ -149,6 +165,7 @@ type SaveMediaInput = {
   thumbnailUrl: string;
   thumbnailFile: File | null;
   audioFile: File | null;
+  isPublished: boolean;
 };
 
 export async function saveMediaItemApi(input: SaveMediaInput, id?: string): Promise<MediaItem | null> {
@@ -169,6 +186,7 @@ export async function saveMediaItemApi(input: SaveMediaInput, id?: string): Prom
   formData.append("media_url", input.mediaUrl);
   formData.append("media_source_type", input.mediaSourceType);
   formData.append("thumbnail_url", input.thumbnailUrl);
+  formData.append("is_published", input.isPublished ? "1" : "0");
 
   if (input.thumbnailFile) {
     formData.append("thumbnail_file", input.thumbnailFile);
@@ -204,6 +222,21 @@ export async function deleteMediaItemApi(id: string): Promise<boolean> {
 
   const response = await fetch(url, { method: "DELETE" });
   return response.ok;
+}
+
+export async function updateMediaPublishStatusApi(id: string, isPublished: boolean): Promise<MediaItem | null> {
+  const url = buildApiUrl(`/api/admin/media/${id}/publish`);
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_published: isPublished }),
+  });
+
+  return parseEnvelope<MediaItem>(response);
 }
 
 export async function fetchEventsApi(): Promise<EventItem[] | null> {

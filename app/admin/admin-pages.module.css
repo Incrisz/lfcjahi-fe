@@ -56,6 +56,21 @@
   gap: 10px;
 }
 
+.inlineInput {
+  border: 1px solid #c8d8e5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #0f2740;
+  background: #fff;
+  min-width: 220px;
+}
+
+.inlineInput:focus {
+  outline: 2px solid #1f6785;
+  border-color: #1f6785;
+}
+
 .linkButton,
 .buttonPrimary,
 .buttonSecondary,
@@ -276,6 +291,39 @@
   gap: 8px;
 }
 
+.categoryList {
+  display: grid;
+  gap: 12px;
+}
+
+.categoryCard {
+  border: 1px solid #d8e4ee;
+  border-radius: 14px;
+  background: #f9fcff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.categoryHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.subcategoryList {
+  display: grid;
+  gap: 8px;
+}
+
+.subcategoryRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .tableWrap {
   width: 100%;
   overflow-x: auto;
@@ -299,6 +347,10 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #4f667b;
+}
+
+.activeTableRow {
+  background: #edf5fc;
 }
 
 .listActions {

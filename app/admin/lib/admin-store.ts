@@ -22,6 +22,7 @@ export type MediaItem = {
   thumbnailUrl: string;
   mediaUrl: string;
   mediaSourceType?: "link" | "file" | "";
+  isPublished: boolean;
   createdAt: string;
 };
 
@@ -172,6 +173,10 @@ export function loadMediaItems(): MediaItem[] {
 
   return items
     .filter((item) => item && item.id && item.title)
+    .map((item) => ({
+      ...item,
+      isPublished: item.isPublished !== false,
+    }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 

@@ -88,11 +88,12 @@ function deleteSubcategoryInMedia(categoryName: string, subcategoryName: string)
 }
 
 export default function AdminCategoriesPage() {
-  const [categories, setCategories] = useState<CategoryItem[]>(loadCategoryTree);
+  const [categories, setCategories] = useState<CategoryItem[]>(() => sortCategoryTree(loadCategoryTree()));
+  const [selectedCategoryId, setSelectedCategoryId] = useState(
+    () => sortCategoryTree(loadCategoryTree())[0]?.id || "",
+  );
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newSubcategoryNames, setNewSubcategoryNames] = useState<Record<string, string>>({});
-  const [categoryDrafts, setCategoryDrafts] = useState<Record<string, string>>({});
-  const [subcategoryDrafts, setSubcategoryDrafts] = useState<Record<string, string>>({});
+  const [newSubcategoryName, setNewSubcategoryName] = useState("");
   const [status, setStatus] = useState("");
 
   useEffect(() => {
@@ -105,7 +106,10 @@ export default function AdminCategoriesPage() {
           return;
         }
 
-        persistCategoryTree(remoteCategories, setCategories);
+        const next = persistCategoryTree(remoteCategories, setCategories);
+        if (next.length > 0) {
+          setSelectedCategoryId(next[0].id);
+        }
       } catch {
         // keep local fallback state
       }
@@ -123,9 +127,10 @@ export default function AdminCategoriesPage() {
     [categories],
   );
 
-  function findCategoryById(categoryId: string): CategoryItem | undefined {
-    return categories.find((entry) => entry.id === categoryId);
-  }
+  const selectedCategory = useMemo(
+    () => categories.find((entry) => entry.id === selectedCategoryId) || null,
+    [categories, selectedCategoryId],
+  );
 
   async function handleAddCategory() {
     const name = newCategoryName.trim();
@@ -148,32 +153,32 @@ export default function AdminCategoriesPage() {
 
     try {
       const remoteCategory = await createCategoryApi(name);
-      const nextCategories = [...categories, remoteCategory || fallbackCategory];
-      persistCategoryTree(nextCategories, setCategories);
+      const addedCategory = remoteCategory || fallbackCategory;
+      const nextCategories = persistCategoryTree([...categories, addedCategory], setCategories);
+      setSelectedCategoryId(addedCategory.id || nextCategories[0]?.id || "");
       setStatus("Category added successfully.");
     } catch {
-      const nextCategories = [...categories, fallbackCategory];
-      persistCategoryTree(nextCategories, setCategories);
+      const nextCategories = persistCategoryTree([...categories, fallbackCategory], setCategories);
+      setSelectedCategoryId(fallbackCategory.id || nextCategories[0]?.id || "");
       setStatus("Category added locally.");
     }
 
     setNewCategoryName("");
   }
 
-  async function handleUpdateCategory(category: CategoryItem) {
-    const draftName = (categoryDrafts[category.id] ?? category.name).trim();
-    if (!draftName) {
-      setStatus("Category name is required.");
+  async function handleEditCategory(category: CategoryItem) {
+    const nextName = window.prompt("Edit category name", category.name)?.trim();
+    if (!nextName) {
       return;
     }
 
-    if (draftName === category.name) {
-      setStatus("No changes to save.");
+    if (nextName === category.name) {
+      setStatus("No changes made.");
       return;
     }
 
     const duplicateExists = categories.some(
-      (item) => item.id !== category.id && item.name.toLowerCase() === draftName.toLowerCase(),
+      (item) => item.id !== category.id && item.name.toLowerCase() === nextName.toLowerCase(),
     );
     if (duplicateExists) {
       setStatus("Another category already uses that name.");
@@ -181,8 +186,8 @@ export default function AdminCategoriesPage() {
     }
 
     try {
-      const remoteCategory = await updateCategoryApi(category.id, draftName);
-      const replacement = remoteCategory || { ...category, name: draftName };
+      const remoteCategory = await updateCategoryApi(category.id, nextName);
+      const replacement = remoteCategory || { ...category, name: nextName };
       const nextCategories = categories.map((item) => (item.id === category.id ? replacement : item));
       persistCategoryTree(nextCategories, setCategories);
       renameCategoryInMedia(category.name, replacement.name);
@@ -192,19 +197,14 @@ export default function AdminCategoriesPage() {
         item.id === category.id
           ? {
               ...item,
-              name: draftName,
+              name: nextName,
             }
           : item,
       );
       persistCategoryTree(nextCategories, setCategories);
-      renameCategoryInMedia(category.name, draftName);
+      renameCategoryInMedia(category.name, nextName);
       setStatus("Category updated locally.");
     }
-
-    setCategoryDrafts((previous) => ({
-      ...previous,
-      [category.id]: "",
-    }));
   }
 
   async function handleDeleteCategory(category: CategoryItem) {
@@ -213,9 +213,15 @@ export default function AdminCategoriesPage() {
       return;
     }
 
-    const nextCategories = categories.filter((item) => item.id !== category.id);
-    persistCategoryTree(nextCategories, setCategories);
+    const nextCategories = persistCategoryTree(
+      categories.filter((item) => item.id !== category.id),
+      setCategories,
+    );
     deleteCategoryInMedia(category.name);
+
+    if (selectedCategoryId === category.id) {
+      setSelectedCategoryId(nextCategories[0]?.id || "");
+    }
 
     try {
       await deleteCategoryApi(category.id);
@@ -225,20 +231,21 @@ export default function AdminCategoriesPage() {
     }
   }
 
-  async function handleAddSubcategory(categoryId: string) {
-    const category = findCategoryById(categoryId);
-    if (!category) {
-      setStatus("Category not found.");
+  async function handleAddSubcategory() {
+    if (!selectedCategory) {
+      setStatus("Please select a category first.");
       return;
     }
 
-    const name = (newSubcategoryNames[categoryId] || "").trim();
+    const name = newSubcategoryName.trim();
     if (!name) {
       setStatus("Subcategory name is required.");
       return;
     }
 
-    const duplicateExists = category.subcategories.some((entry) => entry.name.toLowerCase() === name.toLowerCase());
+    const duplicateExists = selectedCategory.subcategories.some(
+      (entry) => entry.name.toLowerCase() === name.toLowerCase(),
+    );
     if (duplicateExists) {
       setStatus("Subcategory already exists for this category.");
       return;
@@ -250,10 +257,10 @@ export default function AdminCategoriesPage() {
     };
 
     try {
-      const remoteSubcategory = await createSubcategoryApi(categoryId, name);
+      const remoteSubcategory = await createSubcategoryApi(selectedCategory.id, name);
       const subcategory = remoteSubcategory || fallbackSubcategory;
       const nextCategories = categories.map((item) =>
-        item.id === categoryId
+        item.id === selectedCategory.id
           ? {
               ...item,
               subcategories: [...item.subcategories, subcategory],
@@ -264,7 +271,7 @@ export default function AdminCategoriesPage() {
       setStatus("Subcategory added successfully.");
     } catch {
       const nextCategories = categories.map((item) =>
-        item.id === categoryId
+        item.id === selectedCategory.id
           ? {
               ...item,
               subcategories: [...item.subcategories, fallbackSubcategory],
@@ -275,26 +282,26 @@ export default function AdminCategoriesPage() {
       setStatus("Subcategory added locally.");
     }
 
-    setNewSubcategoryNames((previous) => ({
-      ...previous,
-      [categoryId]: "",
-    }));
+    setNewSubcategoryName("");
   }
 
-  async function handleUpdateSubcategory(category: CategoryItem, subcategory: CategorySubcategory) {
-    const draftName = (subcategoryDrafts[subcategory.id] ?? subcategory.name).trim();
-    if (!draftName) {
-      setStatus("Subcategory name is required.");
+  async function handleEditSubcategory(subcategory: CategorySubcategory) {
+    if (!selectedCategory) {
       return;
     }
 
-    if (draftName === subcategory.name) {
-      setStatus("No changes to save.");
+    const nextName = window.prompt("Edit subcategory name", subcategory.name)?.trim();
+    if (!nextName) {
       return;
     }
 
-    const duplicateExists = category.subcategories.some(
-      (entry) => entry.id !== subcategory.id && entry.name.toLowerCase() === draftName.toLowerCase(),
+    if (nextName === subcategory.name) {
+      setStatus("No changes made.");
+      return;
+    }
+
+    const duplicateExists = selectedCategory.subcategories.some(
+      (entry) => entry.id !== subcategory.id && entry.name.toLowerCase() === nextName.toLowerCase(),
     );
     if (duplicateExists) {
       setStatus("Another subcategory already uses that name in this category.");
@@ -302,10 +309,10 @@ export default function AdminCategoriesPage() {
     }
 
     try {
-      const remoteSubcategory = await updateSubcategoryApi(subcategory.id, draftName);
-      const replacement = remoteSubcategory || { ...subcategory, name: draftName };
+      const remoteSubcategory = await updateSubcategoryApi(subcategory.id, nextName);
+      const replacement = remoteSubcategory || { ...subcategory, name: nextName };
       const nextCategories = categories.map((item) =>
-        item.id === category.id
+        item.id === selectedCategory.id
           ? {
               ...item,
               subcategories: item.subcategories.map((entry) => (entry.id === subcategory.id ? replacement : entry)),
@@ -313,18 +320,18 @@ export default function AdminCategoriesPage() {
           : item,
       );
       persistCategoryTree(nextCategories, setCategories);
-      renameSubcategoryInMedia(category.name, subcategory.name, replacement.name);
+      renameSubcategoryInMedia(selectedCategory.name, subcategory.name, replacement.name);
       setStatus("Subcategory updated successfully.");
     } catch {
       const nextCategories = categories.map((item) =>
-        item.id === category.id
+        item.id === selectedCategory.id
           ? {
               ...item,
               subcategories: item.subcategories.map((entry) =>
                 entry.id === subcategory.id
                   ? {
                       ...entry,
-                      name: draftName,
+                      name: nextName,
                     }
                   : entry,
               ),
@@ -332,26 +339,25 @@ export default function AdminCategoriesPage() {
           : item,
       );
       persistCategoryTree(nextCategories, setCategories);
-      renameSubcategoryInMedia(category.name, subcategory.name, draftName);
+      renameSubcategoryInMedia(selectedCategory.name, subcategory.name, nextName);
       setStatus("Subcategory updated locally.");
     }
-
-    setSubcategoryDrafts((previous) => ({
-      ...previous,
-      [subcategory.id]: "",
-    }));
   }
 
-  async function handleDeleteSubcategory(category: CategoryItem, subcategory: CategorySubcategory) {
+  async function handleDeleteSubcategory(subcategory: CategorySubcategory) {
+    if (!selectedCategory) {
+      return;
+    }
+
     const confirmed = window.confirm(
-      `Delete subcategory '${subcategory.name}' from '${category.name}'?`,
+      `Delete subcategory '${subcategory.name}' from '${selectedCategory.name}'?`,
     );
     if (!confirmed) {
       return;
     }
 
     const nextCategories = categories.map((item) =>
-      item.id === category.id
+      item.id === selectedCategory.id
         ? {
             ...item,
             subcategories: item.subcategories.filter((entry) => entry.id !== subcategory.id),
@@ -359,7 +365,7 @@ export default function AdminCategoriesPage() {
         : item,
     );
     persistCategoryTree(nextCategories, setCategories);
-    deleteSubcategoryInMedia(category.name, subcategory.name);
+    deleteSubcategoryInMedia(selectedCategory.name, subcategory.name);
 
     try {
       await deleteSubcategoryApi(subcategory.id);
@@ -384,7 +390,7 @@ export default function AdminCategoriesPage() {
 
       <section className={styles.panel}>
         <h2 className={styles.panelTitle}>Add Category</h2>
-        <p className={styles.panelText}>Create a new content category for media organization.</p>
+        <p className={styles.panelText}>Create a top-level category for your content.</p>
         <div className={styles.inlineActions}>
           <input
             className={styles.inlineInput}
@@ -399,104 +405,129 @@ export default function AdminCategoriesPage() {
       </section>
 
       <section className={styles.panel}>
-        <h2 className={styles.panelTitle}>Category Manager</h2>
+        <h2 className={styles.panelTitle}>Categories</h2>
         {categories.length === 0 ? (
           <p className={styles.emptyState}>No categories yet.</p>
         ) : (
-          <div className={styles.categoryList}>
-            {categories.map((category) => (
-              <article key={category.id} className={styles.categoryCard}>
-                <div className={styles.categoryHeader}>
-                  <input
-                    className={styles.inlineInput}
-                    value={categoryDrafts[category.id] ?? category.name}
-                    onChange={(event) =>
-                      setCategoryDrafts((previous) => ({
-                        ...previous,
-                        [category.id]: event.target.value,
-                      }))
-                    }
-                    aria-label={`Category name for ${category.name}`}
-                  />
-                  <div className={styles.listActions}>
-                    <button
-                      type="button"
-                      className={styles.buttonSecondary}
-                      onClick={() => void handleUpdateCategory(category)}
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.buttonDanger}
-                      onClick={() => void handleDeleteCategory(category)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                <div className={styles.inlineActions}>
-                  <input
-                    className={styles.inlineInput}
-                    value={newSubcategoryNames[category.id] || ""}
-                    onChange={(event) =>
-                      setNewSubcategoryNames((previous) => ({
-                        ...previous,
-                        [category.id]: event.target.value,
-                      }))
-                    }
-                    placeholder={`Add subcategory to ${category.name}`}
-                  />
-                  <button
-                    type="button"
-                    className={styles.buttonPrimary}
-                    onClick={() => void handleAddSubcategory(category.id)}
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Subcategories</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((category) => (
+                  <tr
+                    key={category.id}
+                    className={selectedCategoryId === category.id ? styles.activeTableRow : ""}
+                    onClick={() => setSelectedCategoryId(category.id)}
                   >
-                    Add Subcategory
-                  </button>
-                </div>
-
-                {category.subcategories.length === 0 ? (
-                  <p className={styles.emptyState}>No subcategories in this category.</p>
-                ) : (
-                  <div className={styles.subcategoryList}>
-                    {category.subcategories.map((subcategory) => (
-                      <div key={subcategory.id} className={styles.subcategoryRow}>
-                        <input
-                          className={styles.inlineInput}
-                          value={subcategoryDrafts[subcategory.id] ?? subcategory.name}
-                          onChange={(event) =>
-                            setSubcategoryDrafts((previous) => ({
-                              ...previous,
-                              [subcategory.id]: event.target.value,
-                            }))
-                          }
-                          aria-label={`Subcategory name for ${subcategory.name}`}
-                        />
-                        <div className={styles.listActions}>
-                          <button
-                            type="button"
-                            className={styles.buttonSecondary}
-                            onClick={() => void handleUpdateSubcategory(category, subcategory)}
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.buttonDanger}
-                            onClick={() => void handleDeleteSubcategory(category, subcategory)}
-                          >
-                            Delete
-                          </button>
-                        </div>
+                    <td>{category.name}</td>
+                    <td>{category.subcategories.length}</td>
+                    <td>
+                      <div className={styles.listActions}>
+                        <button
+                          type="button"
+                          className={styles.buttonSecondary}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleEditCategory(category);
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.buttonDanger}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleDeleteCategory(category);
+                          }}
+                        >
+                          Delete
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </article>
-            ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        )}
+      </section>
+
+      <section className={styles.panel}>
+        <h2 className={styles.panelTitle}>Subcategory Manager</h2>
+        {!selectedCategory ? (
+          <p className={styles.emptyState}>Select a category to manage subcategories.</p>
+        ) : (
+          <>
+            <div className={styles.inlineActions}>
+              <select
+                className={styles.inlineInput}
+                value={selectedCategoryId}
+                onChange={(event) => setSelectedCategoryId(event.target.value)}
+              >
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                className={styles.inlineInput}
+                value={newSubcategoryName}
+                onChange={(event) => setNewSubcategoryName(event.target.value)}
+                placeholder={`Add subcategory to ${selectedCategory.name}`}
+              />
+              <button type="button" className={styles.buttonPrimary} onClick={() => void handleAddSubcategory()}>
+                Add Subcategory
+              </button>
+            </div>
+
+            {selectedCategory.subcategories.length === 0 ? (
+              <p className={styles.emptyState}>No subcategories in this category yet.</p>
+            ) : (
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Subcategory</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedCategory.subcategories.map((subcategory) => (
+                      <tr key={subcategory.id}>
+                        <td>{subcategory.name}</td>
+                        <td>
+                          <div className={styles.listActions}>
+                            <button
+                              type="button"
+                              className={styles.buttonSecondary}
+                              onClick={() => void handleEditSubcategory(subcategory)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.buttonDanger}
+                              onClick={() => void handleDeleteSubcategory(subcategory)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </section>
 

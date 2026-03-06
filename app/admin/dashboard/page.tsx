@@ -86,7 +86,7 @@ export default function AdminDashboardPage() {
         <h2 className={styles.panelTitle}>Quick Links</h2>
         <p className={styles.panelText}>Jump into common actions for daily admin work.</p>
         <div className={styles.inlineActions}>
-          <Link className={styles.linkButton} href="/admin/media-library">
+          <Link className={styles.linkButton} href="/admin/media-library/new">
             Add New Media
           </Link>
           <Link className={styles.buttonSecondary} href="/admin/events">
