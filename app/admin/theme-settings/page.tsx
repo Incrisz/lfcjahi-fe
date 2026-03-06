@@ -1,13 +1,36 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import AdminShell from "../components/admin-shell";
 import styles from "../admin-pages.module.css";
 import { ThemeSettings, loadThemeSettings, saveThemeSettings } from "../lib/admin-store";
+import { fetchThemeSettingsApi, saveThemeSettingsApi } from "../lib/admin-api";
 
 export default function AdminThemeSettingsPage() {
   const [settings, setSettings] = useState<ThemeSettings>(loadThemeSettings);
   const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function hydrateFromApi() {
+      try {
+        const remoteSettings = await fetchThemeSettingsApi();
+        if (isActive && remoteSettings) {
+          setSettings(remoteSettings);
+          saveThemeSettings(remoteSettings);
+        }
+      } catch {
+        // keep local fallback state
+      }
+    }
+
+    hydrateFromApi();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   function updateField<Key extends keyof ThemeSettings>(key: Key, value: ThemeSettings[Key]) {
     setSettings((previous) => ({
@@ -19,19 +42,16 @@ export default function AdminThemeSettingsPage() {
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    saveThemeSettings(settings);
-
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (baseUrl) {
-      try {
-        await fetch(`${baseUrl}/api/admin/theme-settings`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(settings),
-        });
-      } catch {
-        // keep local save if API fails
+    try {
+      const remoteSettings = await saveThemeSettingsApi(settings);
+      if (remoteSettings) {
+        setSettings(remoteSettings);
+        saveThemeSettings(remoteSettings);
+      } else {
+        saveThemeSettings(settings);
       }
+    } catch {
+      saveThemeSettings(settings);
     }
 
     setStatus("Theme settings saved successfully.");

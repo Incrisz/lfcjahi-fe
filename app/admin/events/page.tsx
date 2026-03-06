@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import AdminShell from "../components/admin-shell";
 import styles from "../admin-pages.module.css";
 import { EventItem, createId, loadEvents, saveEvents } from "../lib/admin-store";
+import { deleteEventApi, fetchEventsApi, saveEventApi } from "../lib/admin-api";
 
 export default function AdminEventsPage() {
   const [events, setEvents] = useState(loadEvents);
@@ -17,6 +18,28 @@ export default function AdminEventsPage() {
   const [description, setDescription] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [registrationEnabled, setRegistrationEnabled] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function hydrateFromApi() {
+      try {
+        const remoteEvents = await fetchEventsApi();
+        if (isActive && remoteEvents) {
+          setEvents(remoteEvents);
+          saveEvents(remoteEvents);
+        }
+      } catch {
+        // keep local fallback state
+      }
+    }
+
+    hydrateFromApi();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const upcomingEvents = useMemo(() => {
     const today = new Date();
@@ -57,13 +80,10 @@ export default function AdminEventsPage() {
     setEvents(nextEvents);
     saveEvents(nextEvents);
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (baseUrl) {
-      try {
-        await fetch(`${baseUrl}/api/admin/events/${item.id}`, { method: "DELETE" });
-      } catch {
-        // keep local delete if API fails
-      }
+    try {
+      await deleteEventApi(item.id);
+    } catch {
+      // keep local delete if API fails
     }
 
     setStatus(`Deleted event '${item.name}'.`);
@@ -77,7 +97,7 @@ export default function AdminEventsPage() {
       return;
     }
 
-    const nextItem: EventItem = {
+    const localFallbackItem: EventItem = {
       id: editingId || createId("event"),
       name: name.trim(),
       eventDate,
@@ -87,32 +107,41 @@ export default function AdminEventsPage() {
       createdAt: new Date().toISOString(),
     };
 
-    const nextEvents = editingId
-      ? events.map((entry) => (entry.id === editingId ? { ...nextItem, createdAt: entry.createdAt } : entry))
-      : [...events, nextItem];
+    try {
+      const remoteItem = await saveEventApi(
+        {
+          name: localFallbackItem.name,
+          eventDate: localFallbackItem.eventDate,
+          description: localFallbackItem.description,
+          mediaUrl: localFallbackItem.mediaUrl,
+          registrationEnabled: localFallbackItem.registrationEnabled,
+        },
+        editingId || undefined,
+      );
 
-    setEvents(nextEvents);
-    saveEvents(nextEvents);
-
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (baseUrl) {
-      try {
-        if (editingId) {
-          await fetch(`${baseUrl}/api/admin/events/${editingId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(nextItem),
-          });
-        } else {
-          await fetch(`${baseUrl}/api/admin/events`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(nextItem),
-          });
-        }
-      } catch {
-        // keep local save if API fails
+      if (remoteItem) {
+        const nextEvents = editingId
+          ? events.map((entry) => (entry.id === editingId ? remoteItem : entry))
+          : [...events, remoteItem];
+        setEvents(nextEvents);
+        saveEvents(nextEvents);
+      } else {
+        const nextEvents = editingId
+          ? events.map((entry) =>
+              entry.id === editingId ? { ...localFallbackItem, createdAt: entry.createdAt } : entry,
+            )
+          : [...events, localFallbackItem];
+        setEvents(nextEvents);
+        saveEvents(nextEvents);
       }
+    } catch {
+      const nextEvents = editingId
+        ? events.map((entry) =>
+            entry.id === editingId ? { ...localFallbackItem, createdAt: entry.createdAt } : entry,
+          )
+        : [...events, localFallbackItem];
+      setEvents(nextEvents);
+      saveEvents(nextEvents);
     }
 
     setStatus(editingId ? "Event updated successfully." : "Event created successfully.");

@@ -1,14 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminShell from "../components/admin-shell";
 import styles from "../admin-pages.module.css";
 import { loadEvents, loadMediaItems } from "../lib/admin-store";
+import { fetchEventsApi, fetchMediaItemsApi } from "../lib/admin-api";
 
 export default function AdminDashboardPage() {
-  const [mediaItems] = useState(loadMediaItems);
-  const [events] = useState(loadEvents);
+  const [mediaItems, setMediaItems] = useState(loadMediaItems);
+  const [events, setEvents] = useState(loadEvents);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function hydrateFromApi() {
+      try {
+        const [apiMedia, apiEvents] = await Promise.all([fetchMediaItemsApi(), fetchEventsApi()]);
+
+        if (!isActive) {
+          return;
+        }
+
+        if (apiMedia) {
+          setMediaItems(apiMedia);
+        }
+
+        if (apiEvents) {
+          setEvents(apiEvents);
+        }
+      } catch {
+        // keep local fallback state
+      }
+    }
+
+    hydrateFromApi();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const stats = useMemo(() => {
     const videos = mediaItems.filter((item) => item.category === "Videos").length;

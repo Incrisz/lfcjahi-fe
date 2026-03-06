@@ -132,6 +132,74 @@
   border-color: #1f6785;
 }
 
+.uploadCard {
+  border: 1px dashed #9dc2d9;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fcff 0%, #f2f8fd 100%);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.uploadHeader {
+  display: grid;
+  gap: 2px;
+}
+
+.uploadTitle {
+  margin: 0;
+  color: #12314f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.uploadSubtext {
+  margin: 0;
+  color: #5c748a;
+  font-size: 12px;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.fileTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  border-radius: 10px;
+  background: #12314f;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 12px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.fileName {
+  margin: 0;
+  color: #173853;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.uploadPreviewWrap {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #c9deed;
+  background: #fff;
+  max-width: 320px;
+}
+
+.uploadPreview {
+  width: 100%;
+  height: 190px;
+  object-fit: cover;
+  display: block;
+}
+
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

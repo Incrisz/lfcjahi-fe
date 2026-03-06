@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import AdminShell from "../components/admin-shell";
 import styles from "../admin-pages.module.css";
 import {
@@ -12,9 +12,25 @@ import {
   loadMediaItems,
   saveMediaItems,
 } from "../lib/admin-store";
+import {
+  deleteMediaItemApi,
+  fetchMediaItemsApi,
+  hasApiBaseUrl,
+  saveMediaItemApi,
+} from "../lib/admin-api";
 
 type SortMode = "newest" | "oldest" | "speaker" | "category";
 type ViewMode = "grid" | "list";
+type AudioSourceMode = "link" | "file";
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function AdminMediaLibraryPage() {
   const [mediaItems, setMediaItems] = useState(loadMediaItems);
@@ -27,8 +43,13 @@ export default function AdminMediaLibraryPage() {
   const [description, setDescription] = useState("");
   const [speaker, setSpeaker] = useState("");
   const [mediaDate, setMediaDate] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
+  const [existingThumbnailUrl, setExistingThumbnailUrl] = useState("");
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [existingMediaUrl, setExistingMediaUrl] = useState("");
+  const [audioSourceMode, setAudioSourceMode] = useState<AudioSourceMode>("link");
+  const [audioLink, setAudioLink] = useState("");
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [category, setCategory] = useState<MediaCategory>("Videos");
   const [subcategory, setSubcategory] = useState(MEDIA_SUBCATEGORIES.Videos[0]);
 
@@ -36,6 +57,28 @@ export default function AdminMediaLibraryPage() {
   const [filterCategory, setFilterCategory] = useState<"All" | MediaCategory>("All");
   const [filterSpeaker, setFilterSpeaker] = useState("All");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function hydrateFromApi() {
+      try {
+        const remoteItems = await fetchMediaItemsApi();
+        if (isActive && remoteItems) {
+          setMediaItems(remoteItems);
+          saveMediaItems(remoteItems);
+        }
+      } catch {
+        // keep local fallback state
+      }
+    }
+
+    hydrateFromApi();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const speakers = useMemo(() => {
     const values = mediaItems
@@ -81,8 +124,13 @@ export default function AdminMediaLibraryPage() {
     setDescription("");
     setSpeaker("");
     setMediaDate("");
-    setThumbnailUrl("");
-    setMediaUrl("");
+    setExistingThumbnailUrl("");
+    setThumbnailPreviewUrl("");
+    setThumbnailFile(null);
+    setExistingMediaUrl("");
+    setAudioSourceMode("link");
+    setAudioLink("");
+    setAudioFile(null);
     setCategory("Videos");
     setSubcategory(MEDIA_SUBCATEGORIES.Videos[0]);
   }
@@ -90,6 +138,12 @@ export default function AdminMediaLibraryPage() {
   function handleCategoryChange(nextCategory: MediaCategory) {
     setCategory(nextCategory);
     setSubcategory(MEDIA_SUBCATEGORIES[nextCategory][0]);
+
+    if (nextCategory !== "Audio") {
+      setAudioSourceMode("link");
+      setAudioLink("");
+      setAudioFile(null);
+    }
   }
 
   function handleEdit(item: MediaItem) {
@@ -98,12 +152,40 @@ export default function AdminMediaLibraryPage() {
     setDescription(item.description);
     setSpeaker(item.speaker);
     setMediaDate(item.mediaDate);
-    setThumbnailUrl(item.thumbnailUrl);
-    setMediaUrl(item.mediaUrl);
+    setExistingThumbnailUrl(item.thumbnailUrl);
+    setThumbnailPreviewUrl(item.thumbnailUrl);
+    setThumbnailFile(null);
+    setExistingMediaUrl(item.mediaUrl);
+    if (item.category === "Audio") {
+      const mode = item.mediaSourceType === "file" ? "file" : "link";
+      setAudioSourceMode(mode);
+      setAudioLink(mode === "link" ? item.mediaUrl : "");
+      setAudioFile(null);
+    } else {
+      setAudioSourceMode("link");
+      setAudioLink("");
+      setAudioFile(null);
+    }
     setCategory(item.category);
     setSubcategory(item.subcategory || MEDIA_SUBCATEGORIES[item.category][0]);
     setIsFormOpen(true);
     setStatus(`Editing '${item.title}'`);
+  }
+
+  async function handleThumbnailFileSelection(file: File | null) {
+    setThumbnailFile(file);
+
+    if (!file) {
+      setThumbnailPreviewUrl(existingThumbnailUrl);
+      return;
+    }
+
+    try {
+      const preview = await fileToDataUrl(file);
+      setThumbnailPreviewUrl(preview);
+    } catch {
+      setThumbnailPreviewUrl(existingThumbnailUrl);
+    }
   }
 
   async function handleDelete(item: MediaItem) {
@@ -116,13 +198,10 @@ export default function AdminMediaLibraryPage() {
     setMediaItems(nextItems);
     saveMediaItems(nextItems);
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (baseUrl) {
-      try {
-        await fetch(`${baseUrl}/api/admin/media/${item.id}`, { method: "DELETE" });
-      } catch {
-        // keep local delete even if API fails
-      }
+    try {
+      await deleteMediaItemApi(item.id);
+    } catch {
+      // keep local delete even if API fails
     }
 
     setStatus(`Deleted '${item.title}'.`);
@@ -136,50 +215,112 @@ export default function AdminMediaLibraryPage() {
       return;
     }
 
-    const timestamp = new Date().toISOString();
+    let resolvedMediaUrl = existingMediaUrl.trim();
 
-    const newItem: MediaItem = {
+    if (category === "Audio") {
+      if (audioSourceMode === "link") {
+        if (!audioLink.trim()) {
+          setStatus("Audio link is required when source type is link.");
+          return;
+        }
+        resolvedMediaUrl = audioLink.trim();
+      } else {
+        if (!audioFile && !editingId) {
+          setStatus("Please choose an audio file.");
+          return;
+        }
+        if (!audioFile && editingId && existingMediaUrl) {
+          resolvedMediaUrl = existingMediaUrl;
+        } else if (!hasApiBaseUrl()) {
+          setStatus("Audio file upload requires NEXT_PUBLIC_API_BASE_URL.");
+          return;
+        }
+      }
+    }
+
+    let fallbackThumbnail = existingThumbnailUrl.trim();
+
+    if (thumbnailFile && !hasApiBaseUrl()) {
+      try {
+        fallbackThumbnail = await fileToDataUrl(thumbnailFile);
+      } catch {
+        // keep existing URL fallback
+      }
+    }
+
+    const localFallbackItem: MediaItem = {
       id: editingId || createId("media"),
       title: title.trim(),
       description: description.trim(),
       speaker: speaker.trim(),
       mediaDate,
-      thumbnailUrl: thumbnailUrl.trim(),
-      mediaUrl: mediaUrl.trim(),
+      thumbnailUrl: fallbackThumbnail,
+      mediaUrl: resolvedMediaUrl,
+      mediaSourceType: category === "Audio" ? audioSourceMode : "",
       category,
       subcategory,
-      createdAt: timestamp,
+      createdAt: new Date().toISOString(),
     };
 
-    const nextItems = editingId
-      ? mediaItems.map((entry) => (entry.id === editingId ? { ...newItem, createdAt: entry.createdAt } : entry))
-      : [newItem, ...mediaItems];
+    try {
+      const remoteItem = await saveMediaItemApi(
+        {
+          title: localFallbackItem.title,
+          description: localFallbackItem.description,
+          category: localFallbackItem.category,
+          subcategory: localFallbackItem.subcategory,
+          speaker: localFallbackItem.speaker,
+          mediaDate: localFallbackItem.mediaDate,
+          mediaSourceType: localFallbackItem.mediaSourceType || "",
+          mediaUrl: resolvedMediaUrl,
+          thumbnailUrl: existingThumbnailUrl.trim(),
+          thumbnailFile,
+          audioFile,
+        },
+        editingId || undefined,
+      );
 
-    setMediaItems(nextItems);
-    saveMediaItems(nextItems);
+      if (remoteItem) {
+        const nextItems = editingId
+          ? mediaItems.map((entry) => (entry.id === editingId ? remoteItem : entry))
+          : [remoteItem, ...mediaItems];
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (baseUrl) {
-      try {
-        if (editingId) {
-          await fetch(`${baseUrl}/api/admin/media/${editingId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newItem),
-          });
-        } else {
-          await fetch(`${baseUrl}/api/admin/media`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newItem),
-          });
-        }
-      } catch {
-        // keep local save even if API fails
+        setMediaItems(nextItems);
+        saveMediaItems(nextItems);
+        setStatus(editingId ? "Media updated successfully." : "Media added successfully.");
+      } else {
+        const nextItems = editingId
+          ? mediaItems.map((entry) =>
+              entry.id === editingId ? { ...localFallbackItem, createdAt: entry.createdAt } : entry,
+            )
+          : [localFallbackItem, ...mediaItems];
+
+        setMediaItems(nextItems);
+        saveMediaItems(nextItems);
+        setStatus(
+          thumbnailFile
+            ? "Media saved locally. Configure NEXT_PUBLIC_API_BASE_URL to upload thumbnail files."
+            : editingId
+              ? "Media updated successfully."
+              : "Media added successfully.",
+        );
       }
+    } catch {
+      const nextItems = editingId
+        ? mediaItems.map((entry) =>
+            entry.id === editingId ? { ...localFallbackItem, createdAt: entry.createdAt } : entry,
+          )
+        : [localFallbackItem, ...mediaItems];
+
+      setMediaItems(nextItems);
+      saveMediaItems(nextItems);
+      setStatus(
+        thumbnailFile
+          ? "Media saved locally. Configure NEXT_PUBLIC_API_BASE_URL to upload thumbnail files."
+          : "Media saved locally.",
+      );
     }
 
-    setStatus(editingId ? "Media updated successfully." : "Media added successfully.");
     resetForm();
     setIsFormOpen(false);
   }
@@ -285,16 +426,6 @@ export default function AdminMediaLibraryPage() {
               <input id="mediaDate" type="date" value={mediaDate} onChange={(event) => setMediaDate(event.target.value)} />
             </div>
 
-            <div className={styles.field}>
-              <label htmlFor="mediaUrl">Media URL</label>
-              <input
-                id="mediaUrl"
-                value={mediaUrl}
-                onChange={(event) => setMediaUrl(event.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-
             <div className={`${styles.field} ${styles.formGridFull}`}>
               <label htmlFor="mediaDescription">Description</label>
               <textarea
@@ -306,14 +437,107 @@ export default function AdminMediaLibraryPage() {
             </div>
 
             <div className={`${styles.field} ${styles.formGridFull}`}>
-              <label htmlFor="thumbUrl">Thumbnail URL</label>
-              <input
-                id="thumbUrl"
-                value={thumbnailUrl}
-                onChange={(event) => setThumbnailUrl(event.target.value)}
-                placeholder="https://..."
-              />
+              <label htmlFor="thumbFile">Thumbnail Image Upload</label>
+              <div className={styles.uploadCard}>
+                <div className={styles.uploadHeader}>
+                  <p className={styles.uploadTitle}>Upload thumbnail image</p>
+                  <p className={styles.uploadSubtext}>JPG, PNG, or WebP. Maximum file size: 5MB.</p>
+                </div>
+
+                <input
+                  id="thumbFile"
+                  className={styles.hiddenFileInput}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    void handleThumbnailFileSelection(file);
+                  }}
+                />
+
+                <label htmlFor="thumbFile" className={styles.fileTrigger}>
+                  Choose Image
+                </label>
+
+                {thumbnailFile ? <p className={styles.fileName}>{thumbnailFile.name}</p> : null}
+
+                {thumbnailPreviewUrl ? (
+                  <div className={styles.uploadPreviewWrap}>
+                    <img src={thumbnailPreviewUrl} alt="Thumbnail preview" className={styles.uploadPreview} />
+                  </div>
+                ) : (
+                  <p className={styles.uploadSubtext}>No thumbnail selected yet.</p>
+                )}
+              </div>
             </div>
+
+            {category === "Audio" ? (
+              <div className={`${styles.field} ${styles.formGridFull}`}>
+                <label>Audio Source</label>
+                <div className={styles.toggleGroup}>
+                  <button
+                    type="button"
+                    className={`${styles.toggleButton} ${audioSourceMode === "link" ? styles.toggleButtonActive : ""}`}
+                    onClick={() => {
+                      setAudioSourceMode("link");
+                      setAudioFile(null);
+                    }}
+                  >
+                    Use Audio Link
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.toggleButton} ${audioSourceMode === "file" ? styles.toggleButtonActive : ""}`}
+                    onClick={() => {
+                      setAudioSourceMode("file");
+                    }}
+                  >
+                    Upload Audio File
+                  </button>
+                </div>
+
+                {audioSourceMode === "link" ? (
+                  <div className={styles.field}>
+                    <label htmlFor="audioLink">Audio Link</label>
+                    <input
+                      id="audioLink"
+                      value={audioLink}
+                      onChange={(event) => setAudioLink(event.target.value)}
+                      placeholder="https://.../sermon.mp3"
+                    />
+                  </div>
+                ) : (
+                  <div className={styles.uploadCard}>
+                    <div className={styles.uploadHeader}>
+                      <p className={styles.uploadTitle}>Upload audio file</p>
+                      <p className={styles.uploadSubtext}>MP3, WAV, M4A, AAC, OGG. Maximum file size: 50MB.</p>
+                    </div>
+
+                    <input
+                      id="audioFile"
+                      className={styles.hiddenFileInput}
+                      type="file"
+                      accept="audio/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setAudioFile(file);
+                      }}
+                    />
+                    <label htmlFor="audioFile" className={styles.fileTrigger}>
+                      Choose Audio File
+                    </label>
+
+                    {audioFile ? (
+                      <p className={styles.fileName}>{audioFile.name}</p>
+                    ) : existingMediaUrl ? (
+                      <p className={styles.uploadSubtext}>Current audio file is already attached.</p>
+                    ) : (
+                      <p className={styles.uploadSubtext}>No audio file selected yet.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             <div className={`${styles.inlineActions} ${styles.formGridFull}`}>
               <button className={styles.buttonPrimary} type="submit">

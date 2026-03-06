@@ -28,14 +28,7 @@
 .sidebarHeader {
   display: flex;
   align-items: center;
-  gap: 10px;
   margin-bottom: 22px;
-}
-
-.logo {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
 }
 
 .kicker {

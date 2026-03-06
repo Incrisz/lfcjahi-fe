@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import AdminShell from "../../components/admin-shell";
 import styles from "../../admin-pages.module.css";
+import { createBlogPostApi } from "../../lib/admin-api";
 
 type BlogDraft = {
   title: string;
@@ -26,7 +27,7 @@ export default function AdminBlogNewPage() {
     setDraft((previous) => ({ ...previous, [key]: value }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!draft.title.trim()) {
@@ -41,7 +42,18 @@ export default function AdminBlogNewPage() {
       window.localStorage.setItem(BLOG_DRAFT_KEY, JSON.stringify(next));
     }
 
-    setStatus("Blog draft saved locally.");
+    try {
+      const savedToApi = await createBlogPostApi({
+        title: draft.title,
+        excerpt: draft.excerpt,
+        content: draft.content,
+        publishDate: draft.publishDate,
+        status: "draft",
+      });
+      setStatus(savedToApi ? "Blog post draft saved to API and local storage." : "Blog draft saved locally.");
+    } catch {
+      setStatus("Blog draft saved locally.");
+    }
     setDraft({
       title: "",
       excerpt: "",

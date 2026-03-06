@@ -19,6 +19,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/media-library", label: "Media Library" },
+  { href: "/admin/categories", label: "Categories" },
   { href: "/admin/events", label: "Events" },
   { href: "/admin/theme-settings", label: "Theme Settings" },
 ];
@@ -68,7 +69,6 @@ export default function AdminShell({ title, children }: AdminShellProps) {
     <main className={styles.page}>
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ""}`}>
         <div className={styles.sidebarHeader}>
-          <img src="/assets/images/logo-1.png" alt="LFC Jahi" className={styles.logo} />
           <div>
             <p className={styles.kicker}>LFC Jahi</p>
             <h2 className={styles.sidebarTitle}>Admin Dashboard</h2>
