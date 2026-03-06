@@ -36,6 +36,10 @@ function isAudioCategory(category: string): boolean {
   return category.trim().toLowerCase() === "audio";
 }
 
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 export default function MediaForm({ mediaId }: MediaFormProps) {
   const router = useRouter();
   const isEditing = Boolean(mediaId);
@@ -54,11 +58,22 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [existingMediaUrl, setExistingMediaUrl] = useState("");
   const [audioSourceMode, setAudioSourceMode] = useState<AudioSourceMode>("link");
-  const [audioLink, setAudioLink] = useState("");
+  const [audioLink, setAudioLinkInternal] = useState<string>("");
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [category, setCategory] = useState<MediaCategory>("");
   const [subcategory, setSubcategory] = useState("");
   const [isPublished, setIsPublished] = useState(true);
+
+  // Ensure audioLink is always a string to prevent controlled/uncontrolled input issues
+  const setAudioLink = (value: string | ((prev: string) => string)) => {
+    if (typeof value === "function") {
+      setAudioLinkInternal((prev) => asString(value(asString(prev))));
+    } else {
+      setAudioLinkInternal(asString(value));
+    }
+  };
+
+  const normalizedAudioLink = asString(audioLink);
 
   useEffect(() => {
     let isActive = true;
@@ -124,19 +139,19 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
           ? item.subcategory
           : subcategoryOptions[0] || "";
 
-      setTitle(item.title || "");
-      setDescription(item.description || "");
-      setSpeaker(item.speaker || "");
-      setMediaDate(item.mediaDate || "");
-      setExistingThumbnailUrl(item.thumbnailUrl || "");
-      setThumbnailPreviewUrl(item.thumbnailUrl || "");
+      setTitle(asString(item.title));
+      setDescription(asString(item.description));
+      setSpeaker(asString(item.speaker));
+      setMediaDate(asString(item.mediaDate));
+      setExistingThumbnailUrl(asString(item.thumbnailUrl));
+      setThumbnailPreviewUrl(asString(item.thumbnailUrl));
       setThumbnailFile(null);
-      setExistingMediaUrl(item.mediaUrl || "");
+      setExistingMediaUrl(asString(item.mediaUrl));
 
       if (isAudioCategory(item.category)) {
         const mode = item.mediaSourceType === "file" ? "file" : "link";
         setAudioSourceMode(mode);
-        setAudioLink(mode === "link" ? (item.mediaUrl || "") : "");
+        setAudioLink(mode === "link" ? asString(item.mediaUrl) : "");
       } else {
         setAudioSourceMode("link");
         setAudioLink("");
@@ -224,11 +239,11 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       resolvedMediaSourceType = audioSourceMode;
 
       if (audioSourceMode === "link") {
-        if (!audioLink.trim()) {
+        if (!asString(audioLink).trim()) {
           setStatus("Audio link is required.");
           return;
         }
-        resolvedMediaUrl = audioLink.trim();
+        resolvedMediaUrl = asString(audioLink).trim();
       } else {
         if (!audioFile && !isEditing) {
           setStatus("Please choose an audio file.");
@@ -362,7 +377,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <label htmlFor="mediaTitle">Title</label>
             <input
               id="mediaTitle"
-              value={title}
+              value={title || ""}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Enter media title"
               required
@@ -373,7 +388,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <label htmlFor="mediaSpeaker">Speaker</label>
             <input
               id="mediaSpeaker"
-              value={speaker}
+              value={speaker || ""}
               onChange={(event) => setSpeaker(event.target.value)}
               placeholder="e.g. Pastor John"
             />
@@ -383,7 +398,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <label htmlFor="mediaCategory">Category</label>
             <select
               id="mediaCategory"
-              value={category}
+              value={category || ""}
               onChange={(event) => handleCategoryChange(event.target.value)}
             >
               {categoryOptions.map((categoryOption) => (
@@ -398,7 +413,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <label htmlFor="mediaSubcategory">Subcategory</label>
             <select
               id="mediaSubcategory"
-              value={subcategory}
+              value={subcategory || ""}
               onChange={(event) => setSubcategory(event.target.value)}
             >
               {subcategoryOptions.map((subOption) => (
@@ -414,7 +429,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <input
               id="mediaDate"
               type="date"
-              value={mediaDate}
+              value={mediaDate || ""}
               onChange={(event) => setMediaDate(event.target.value)}
             />
           </div>
@@ -435,7 +450,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <label htmlFor="mediaDescription">Description</label>
             <textarea
               id="mediaDescription"
-              value={description}
+              value={description || ""}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Write a short description"
             />
@@ -477,7 +492,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
           </div>
 
           {isAudioCategory(category) ? (
-            <div className={`${styles.field} ${styles.formGridFull}`}>
+            <div key={`audio-source-${audioSourceMode}`} className={`${styles.field} ${styles.formGridFull}`}>
               <label>Audio Source</label>
               <div className={styles.toggleGroup}>
                 <button
@@ -486,6 +501,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
                   onClick={() => {
                     setAudioSourceMode("link");
                     setAudioFile(null);
+                    setAudioLink(normalizedAudioLink);
                   }}
                 >
                   Use Audio Link
@@ -500,17 +516,17 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
               </div>
 
               {audioSourceMode === "link" ? (
-                <div className={styles.field}>
+                <div key="audio-link-mode" className={styles.field}>
                   <label htmlFor="audioLink">Audio Link</label>
                   <input
                     id="audioLink"
-                    value={audioLink ?? ""}
+                    value={normalizedAudioLink}
                     onChange={(event) => setAudioLink(event.target.value)}
                     placeholder="https://.../sermon.mp3"
                   />
                 </div>
               ) : (
-                <div className={styles.uploadCard}>
+                <div key="audio-file-mode" className={styles.uploadCard}>
                   <div className={styles.uploadHeader}>
                     <p className={styles.uploadTitle}>Upload audio file</p>
                     <p className={styles.uploadSubtext}>MP3, WAV, M4A, AAC, OGG. Maximum file size: 50MB.</p>

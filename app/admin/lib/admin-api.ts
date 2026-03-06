@@ -41,11 +41,18 @@ async function parseEnvelope<T>(response: Response): Promise<T> {
             .filter(Boolean)
             .join(" ")
         : "";
+    const combined = errors && errors !== message ? `${message} ${errors}`.trim() : message;
 
-    throw new Error(errors ? `${message} ${errors}`.trim() : message);
+    throw new Error(combined);
   }
 
-  return ((payload as ApiEnvelope<T> | null)?.data ?? null) as T;
+  if (!payload || !("data" in payload)) {
+    throw new Error(
+      "Invalid API response. Check NEXT_PUBLIC_API_BASE_URL, backend availability, and CORS configuration.",
+    );
+  }
+
+  return payload.data;
 }
 
 export function hasApiBaseUrl(): boolean {
@@ -177,15 +184,36 @@ export async function saveMediaItemApi(input: SaveMediaInput, id?: string): Prom
   }
 
   const formData = new FormData();
+  const trimmedMediaUrl = input.mediaUrl.trim();
+  const trimmedThumbnailUrl = input.thumbnailUrl.trim();
+  const trimmedMediaDate = input.mediaDate.trim();
+  const mediaSourceType = input.mediaSourceType === "link" || input.mediaSourceType === "file"
+    ? input.mediaSourceType
+    : "";
+  const shouldSendMediaUrl = !(mediaSourceType === "file" && input.audioFile);
+
   formData.append("title", input.title);
   formData.append("description", input.description);
   formData.append("category", input.category);
   formData.append("subcategory", input.subcategory);
   formData.append("speaker", input.speaker);
-  formData.append("media_date", input.mediaDate);
-  formData.append("media_url", input.mediaUrl);
-  formData.append("media_source_type", input.mediaSourceType);
-  formData.append("thumbnail_url", input.thumbnailUrl);
+
+  if (trimmedMediaDate) {
+    formData.append("media_date", trimmedMediaDate);
+  }
+
+  if (shouldSendMediaUrl && trimmedMediaUrl) {
+    formData.append("media_url", trimmedMediaUrl);
+  }
+
+  if (mediaSourceType) {
+    formData.append("media_source_type", mediaSourceType);
+  }
+
+  if (trimmedThumbnailUrl) {
+    formData.append("thumbnail_url", trimmedThumbnailUrl);
+  }
+
   formData.append("is_published", input.isPublished ? "1" : "0");
 
   if (input.thumbnailFile) {
@@ -202,11 +230,19 @@ export async function saveMediaItemApi(input: SaveMediaInput, id?: string): Prom
     formData.append("_method", "PUT");
     response = await fetch(updateUrl as string, {
       method: "POST",
+      headers: {
+        Accept: "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
       body: formData,
     });
   } else {
     response = await fetch(createUrl, {
       method: "POST",
+      headers: {
+        Accept: "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
       body: formData,
     });
   }
