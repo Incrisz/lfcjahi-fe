@@ -10,8 +10,8 @@ const AUTH_KEY = "lfcjahi_admin_auth";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState(ADMIN_USERNAME);
-  const [password, setPassword] = useState(ADMIN_PASSWORD);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
