@@ -328,7 +328,7 @@ export default function AdminMediaLibraryPage() {
                           <audio controls preload="none" src={item.mediaUrl} style={{ width: 170 }}>
                             Your browser does not support audio playback.
                           </audio>
-                          <a
+                          {/* <a
                             className={styles.downloadLink}
                             href={item.mediaUrl}
                             download={item.title || true}
@@ -336,7 +336,7 @@ export default function AdminMediaLibraryPage() {
                             rel="noopener noreferrer"
                           >
                             &#x2913; Download
-                          </a>
+                          </a> */}
                         </div>
                       ) : (
                         "-"
