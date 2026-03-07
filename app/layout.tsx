@@ -14,9 +14,6 @@ export const metadata: Metadata = {
   title: "LFC-JAHI MEDIA",
   description: "LFC-JAHI MEDIA audio message library",
   keywords: ["LFC-JAHI MEDIA", "Audio Messages", "Sermons"],
-  icons: {
-    icon: "/favicon.png",
-  },
 };
 
 export default function RootLayout({

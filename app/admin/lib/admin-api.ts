@@ -175,7 +175,13 @@ type SaveMediaInput = {
   isPublished: boolean;
 };
 
-export async function saveMediaItemApi(input: SaveMediaInput, id?: string): Promise<MediaItem | null> {
+export type UploadProgressCallback = (percent: number) => void;
+
+export async function saveMediaItemApi(
+  input: SaveMediaInput,
+  id?: string,
+  onProgress?: UploadProgressCallback,
+): Promise<MediaItem | null> {
   const createUrl = buildApiUrl("/api/admin/media");
   const updateUrl = id ? buildApiUrl(`/api/admin/media/${id}`) : null;
 
@@ -224,6 +230,54 @@ export async function saveMediaItemApi(input: SaveMediaInput, id?: string): Prom
     formData.append("audio_file", input.audioFile);
   }
 
+  // When files are attached and a progress callback is provided, use XHR
+  // so we can report upload progress to the UI.
+  const hasFiles = Boolean(input.audioFile || input.thumbnailFile);
+
+  if (hasFiles && onProgress) {
+    if (id) {
+      formData.append("_method", "PUT");
+    }
+    const targetUrl = id ? (updateUrl as string) : createUrl;
+
+    return new Promise<MediaItem>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        try {
+          const payload = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300 && payload && "data" in payload) {
+            resolve(payload.data as MediaItem);
+          } else {
+            const message = payload?.message || `Upload failed with status ${xhr.status}`;
+            const errors = payload?.errors
+              ? Object.values(payload.errors as Record<string, string[]>).flat().filter(Boolean).join(" ")
+              : "";
+            reject(new Error(errors && errors !== message ? `${message} ${errors}`.trim() : message));
+          }
+        } catch {
+          reject(new Error("Invalid response from server."));
+        }
+      });
+
+      xhr.addEventListener("error", () => reject(new Error("Network error during upload.")));
+      xhr.addEventListener("abort", () => reject(new Error("Upload was cancelled.")));
+
+      xhr.open("POST", targetUrl);
+      xhr.setRequestHeader("Accept", "application/json");
+      xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+      xhr.send(formData);
+    });
+  }
+
+  // Fallback to fetch when there are no files or no progress callback
   let response: Response;
 
   if (id) {

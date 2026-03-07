@@ -48,6 +48,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
   const [categoryTree, setCategoryTree] = useState(loadCategoryTree);
   const [isReady, setIsReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [status, setStatus] = useState("");
 
   const [title, setTitle] = useState("");
@@ -220,6 +221,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
     event.preventDefault();
     if (isSaving) return;
     setStatus("");
+    setUploadProgress(0);
     setIsSaving(true);
 
     if (!title.trim()) {
@@ -316,6 +318,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
           isPublished,
         },
         mediaId,
+        setUploadProgress,
       );
 
       if (remoteItem) {
@@ -567,6 +570,15 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
                   )}
                 </div>
               )}
+            </div>
+          ) : null}
+
+          {isSaving && uploadProgress > 0 ? (
+            <div className={`${styles.progressWrap} ${styles.formGridFull}`}>
+              <p className={styles.progressLabel}>Uploading… {uploadProgress}%</p>
+              <div className={styles.progressTrack}>
+                <div className={styles.progressFill} style={{ width: `${uploadProgress}%` }} />
+              </div>
             </div>
           ) : null}
 

@@ -319,9 +319,20 @@ export default function AdminMediaLibraryPage() {
                     <td>{item.speaker || "-"}</td>
                     <td>
                       {item.mediaUrl ? (
-                        <audio controls preload="none" src={item.mediaUrl} style={{ width: 170 }}>
-                          Your browser does not support audio playback.
-                        </audio>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                          <audio controls preload="none" src={item.mediaUrl} style={{ width: 170 }}>
+                            Your browser does not support audio playback.
+                          </audio>
+                          <a
+                            className={styles.downloadLink}
+                            href={item.mediaUrl}
+                            download={item.title || true}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            &#x2913; Download
+                          </a>
+                        </div>
                       ) : (
                         "-"
                       )}
