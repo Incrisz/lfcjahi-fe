@@ -214,7 +214,7 @@ export async function deleteSpeakerApi(id: string): Promise<boolean> {
   }
 
   const response = await fetch(url, { method: "DELETE" });
-  return response.ok;
+  return ensureSuccess(response);
 }
 
 export async function fetchMediaItemsApi(): Promise<MediaItem[] | null> {

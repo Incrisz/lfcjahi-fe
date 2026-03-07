@@ -15,6 +15,7 @@ import {
   createSpeakerApi,
   deleteSpeakerApi,
   fetchSpeakersApi,
+  hasApiBaseUrl,
   updateSpeakerApi,
 } from "../lib/admin-api";
 
@@ -53,6 +54,10 @@ function deleteSpeakerInMedia(name: string): void {
   );
 
   saveMediaItems(nextMedia);
+}
+
+function countSpeakerContent(name: string): number {
+  return loadMediaItems().filter((item) => item.speaker === name).length;
 }
 
 export default function AdminSpeakersPage() {
@@ -157,17 +162,29 @@ export default function AdminSpeakersPage() {
       return;
     }
 
-    persistSpeakers(
-      speakers.filter((item) => item.id !== speaker.id),
-      setSpeakers,
-    );
-    deleteSpeakerInMedia(speaker.name);
+    const attachedContentCount = countSpeakerContent(speaker.name);
+    if (attachedContentCount > 0) {
+      setStatus(
+        `Cannot delete '${speaker.name}' because it still has ${attachedContentCount} media item(s). Remove the content first.`,
+      );
+      return;
+    }
+
+    const apiConfigured = hasApiBaseUrl();
 
     try {
-      await deleteSpeakerApi(speaker.id);
-      setStatus("Speaker deleted successfully.");
-    } catch {
-      setStatus("Speaker deleted locally.");
+      if (apiConfigured) {
+        await deleteSpeakerApi(speaker.id);
+      }
+
+      persistSpeakers(
+        speakers.filter((item) => item.id !== speaker.id),
+        setSpeakers,
+      );
+      deleteSpeakerInMedia(speaker.name);
+      setStatus(apiConfigured ? "Speaker deleted successfully." : "Speaker deleted locally.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not delete speaker.");
     }
   }
 
