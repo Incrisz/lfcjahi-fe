@@ -59,6 +59,8 @@ const SPEAKERS_KEY = "lfcjahi_admin_speakers";
 
 export const AUTH_KEY = "lfcjahi_admin_auth";
 export const USER_KEY = "lfcjahi_admin_user";
+export const AUTH_EXPIRY_KEY = "lfcjahi_admin_auth_expires_at";
+export const SESSION_DURATION_MS = 4 * 60 * 60 * 1000;
 
 export const DEFAULT_CATEGORY_TREE: CategoryItem[] = [
   {
@@ -119,6 +121,54 @@ function parseJson<T>(value: string | null, fallback: T): T {
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined";
+}
+
+export function clearAdminSession(): void {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  window.localStorage.removeItem(AUTH_KEY);
+  window.localStorage.removeItem(USER_KEY);
+  window.localStorage.removeItem(AUTH_EXPIRY_KEY);
+}
+
+export function setAdminSession(username: string): void {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  window.localStorage.setItem(AUTH_KEY, "true");
+  window.localStorage.setItem(USER_KEY, username.trim());
+  window.localStorage.setItem(AUTH_EXPIRY_KEY, String(Date.now() + SESSION_DURATION_MS));
+}
+
+export function isAdminSessionActive(): boolean {
+  if (!canUseStorage()) {
+    return false;
+  }
+
+  const isAuthenticated = window.localStorage.getItem(AUTH_KEY) === "true";
+  const expiresAt = Number(window.localStorage.getItem(AUTH_EXPIRY_KEY) || "0");
+
+  if (!isAuthenticated || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    clearAdminSession();
+    return false;
+  }
+
+  return true;
+}
+
+export function getStoredAdminName(): string {
+  if (!canUseStorage()) {
+    return "";
+  }
+
+  if (!isAdminSessionActive()) {
+    return "";
+  }
+
+  return window.localStorage.getItem(USER_KEY) || "";
 }
 
 function normalizeCategoryTree(tree: CategoryItem[]): CategoryItem[] {

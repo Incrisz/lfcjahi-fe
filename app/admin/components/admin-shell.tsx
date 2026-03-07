@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState, useSyncExternalStore } from "react";
-import { AUTH_KEY, USER_KEY } from "../lib/admin-store";
+import { clearAdminSession, getStoredAdminName, isAdminSessionActive } from "../lib/admin-store";
 import styles from "./admin-shell.module.css";
 
 type AdminShellProps = {
@@ -24,15 +24,16 @@ function subscribeStorage(callback: () => void): () => void {
   }
 
   window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
+  const intervalId = window.setInterval(callback, 30000);
+
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.clearInterval(intervalId);
+  };
 }
 
 function getAuthClientSnapshot(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  return window.localStorage.getItem(AUTH_KEY) === "true";
+  return isAdminSessionActive();
 }
 
 function getAuthServerSnapshot(): boolean {
@@ -40,11 +41,7 @@ function getAuthServerSnapshot(): boolean {
 }
 
 function getAdminNameClientSnapshot(): string {
-  if (typeof window === "undefined") {
-    return DEFAULT_ADMIN_NAME;
-  }
-
-  return window.localStorage.getItem(USER_KEY) || DEFAULT_ADMIN_NAME;
+  return getStoredAdminName() || DEFAULT_ADMIN_NAME;
 }
 
 function getAdminNameServerSnapshot(): string {
@@ -79,8 +76,7 @@ export default function AdminShell({ title, children }: AdminShellProps) {
   }, [isReady, router]);
 
   function handleLogout() {
-    window.localStorage.removeItem(AUTH_KEY);
-    window.localStorage.removeItem(USER_KEY);
+    clearAdminSession();
     router.push("/admin/login");
   }
 

@@ -2,12 +2,11 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isAdminSessionActive, setAdminSession } from "../lib/admin-store";
 import styles from "./login.module.css";
 
 const ADMIN_USERNAME = "admin@lfcjahi.com";
 const ADMIN_PASSWORD = "12345678";
-const AUTH_KEY = "lfcjahi_admin_auth";
-
 export default function AdminLoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -20,8 +19,7 @@ export default function AdminLoginPage() {
       return;
     }
 
-    const isAuthenticated = window.localStorage.getItem(AUTH_KEY) === "true";
-    if (isAuthenticated) {
+    if (isAdminSessionActive()) {
       router.replace("/admin/dashboard");
     }
   }, [router]);
@@ -39,8 +37,7 @@ export default function AdminLoginPage() {
       return;
     }
 
-    window.localStorage.setItem(AUTH_KEY, "true");
-    window.localStorage.setItem("lfcjahi_admin_user", username.trim());
+    setAdminSession(username.trim());
     router.push("/admin/dashboard");
   }
 
