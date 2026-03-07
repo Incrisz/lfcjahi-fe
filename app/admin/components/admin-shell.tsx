@@ -55,6 +55,7 @@ const navItems: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/media-library", label: "Media Library" },
   { href: "/admin/categories", label: "Categories" },
+  { href: "/admin/speakers", label: "Speakers" },
   { href: "/admin/events", label: "Events" },
   // { href: "/admin/theme-settings", label: "Theme Settings" },
 ];

@@ -9,13 +9,22 @@ import {
   MediaItem,
   createId,
   getCategoryNames,
+  getSpeakerNames,
   getSubcategoryNames,
   loadCategoryTree,
   loadMediaItems,
+  loadSpeakers,
   saveCategoryTree,
   saveMediaItems,
+  saveSpeakers,
 } from "../lib/admin-store";
-import { fetchCategoriesApi, fetchMediaItemsApi, hasApiBaseUrl, saveMediaItemApi } from "../lib/admin-api";
+import {
+  fetchCategoriesApi,
+  fetchMediaItemsApi,
+  fetchSpeakersApi,
+  hasApiBaseUrl,
+  saveMediaItemApi,
+} from "../lib/admin-api";
 
 type AudioSourceMode = "link" | "file";
 
@@ -46,6 +55,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
 
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [categoryTree, setCategoryTree] = useState(loadCategoryTree);
+  const [speakers, setSpeakers] = useState(loadSpeakers);
   const [isReady, setIsReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -83,11 +93,13 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
     async function initializePage() {
       let nextCategoryTree = loadCategoryTree();
       let nextMediaItems = loadMediaItems();
+      let nextSpeakers = loadSpeakers();
 
       try {
-        const [remoteCategories, remoteMediaItems] = await Promise.all([
+        const [remoteCategories, remoteMediaItems, remoteSpeakers] = await Promise.all([
           fetchCategoriesApi(),
           fetchMediaItemsApi(),
+          fetchSpeakersApi(),
         ]);
 
         if (!isActive) {
@@ -103,6 +115,11 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
           nextMediaItems = remoteMediaItems;
           saveMediaItems(remoteMediaItems);
         }
+
+        if (remoteSpeakers) {
+          nextSpeakers = remoteSpeakers;
+          saveSpeakers(remoteSpeakers);
+        }
       } catch {
         // keep local fallback state
       }
@@ -113,6 +130,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
 
       setCategoryTree(nextCategoryTree);
       setMediaItems(nextMediaItems);
+      setSpeakers(nextSpeakers);
 
       const categoryOptions = getCategoryNames(nextCategoryTree);
       const fallbackCategory = categoryOptions[0] || "";
@@ -188,6 +206,14 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
     }
     return names;
   }, [category, categoryTree, subcategory]);
+
+  const speakerOptions = useMemo(() => {
+    const names = getSpeakerNames(speakers);
+    if (speaker && !names.includes(speaker)) {
+      return [...names, speaker].sort((a, b) => a.localeCompare(b));
+    }
+    return names;
+  }, [speaker, speakers]);
 
   async function handleThumbnailFileSelection(file: File | null) {
     setThumbnailFile(file);
@@ -401,12 +427,18 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
 
           <div className={styles.field}>
             <label htmlFor="mediaSpeaker">Speaker</label>
-            <input
+            <select
               id="mediaSpeaker"
               value={speaker || ""}
               onChange={(event) => setSpeaker(event.target.value)}
-              placeholder="e.g. Pastor John"
-            />
+            >
+              <option value="">No speaker</option>
+              {speakerOptions.map((speakerOption) => (
+                <option key={speakerOption} value={speakerOption}>
+                  {speakerOption}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className={styles.field}>

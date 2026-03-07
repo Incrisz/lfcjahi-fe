@@ -11,6 +11,11 @@ export type CategoryItem = {
   subcategories: CategorySubcategory[];
 };
 
+export type SpeakerItem = {
+  id: string;
+  name: string;
+};
+
 export type MediaItem = {
   id: string;
   title: string;
@@ -50,6 +55,7 @@ const MEDIA_KEY = "lfcjahi_admin_media_items";
 const EVENTS_KEY = "lfcjahi_admin_events";
 const THEME_KEY = "lfcjahi_admin_theme_settings";
 const CATEGORY_TREE_KEY = "lfcjahi_admin_category_tree";
+const SPEAKERS_KEY = "lfcjahi_admin_speakers";
 
 export const AUTH_KEY = "lfcjahi_admin_auth";
 export const USER_KEY = "lfcjahi_admin_user";
@@ -131,6 +137,17 @@ function normalizeCategoryTree(tree: CategoryItem[]): CategoryItem[] {
     .filter((entry) => entry.name.length > 0);
 }
 
+function normalizeSpeakers(items: SpeakerItem[]): SpeakerItem[] {
+  return items
+    .filter((entry) => entry && entry.name)
+    .map((entry, index) => ({
+      id: entry.id || `local-speaker-${index}`,
+      name: entry.name.trim(),
+    }))
+    .filter((entry) => entry.name.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function loadCategoryTree(): CategoryItem[] {
   if (!canUseStorage()) {
     return DEFAULT_CATEGORY_TREE;
@@ -162,6 +179,41 @@ export function getSubcategoryNames(tree: CategoryItem[], categoryName: string):
   }
 
   return category.subcategories.map((entry) => entry.name);
+}
+
+export function loadSpeakers(): SpeakerItem[] {
+  if (!canUseStorage()) {
+    return [];
+  }
+
+  const stored = parseJson<SpeakerItem[]>(window.localStorage.getItem(SPEAKERS_KEY), []);
+  const normalizedStored = normalizeSpeakers(stored);
+  if (normalizedStored.length > 0) {
+    return normalizedStored;
+  }
+
+  const mediaSpeakers = parseJson<MediaItem[]>(window.localStorage.getItem(MEDIA_KEY), [])
+    .map((item) => (item?.speaker || "").trim())
+    .filter(Boolean)
+    .filter((name, index, values) => values.indexOf(name) === index)
+    .map((name, index) => ({
+      id: `derived-speaker-${index}`,
+      name,
+    }));
+
+  return normalizeSpeakers(mediaSpeakers);
+}
+
+export function saveSpeakers(items: SpeakerItem[]): void {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  window.localStorage.setItem(SPEAKERS_KEY, JSON.stringify(normalizeSpeakers(items)));
+}
+
+export function getSpeakerNames(items: SpeakerItem[]): string[] {
+  return normalizeSpeakers(items).map((entry) => entry.name);
 }
 
 export function loadMediaItems(): MediaItem[] {

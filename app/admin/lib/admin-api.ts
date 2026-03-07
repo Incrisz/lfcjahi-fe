@@ -1,4 +1,4 @@
-import { CategoryItem, EventItem, MediaItem, ThemeSettings } from "./admin-store";
+import { CategoryItem, EventItem, MediaItem, SpeakerItem, ThemeSettings } from "./admin-store";
 
 type ApiEnvelope<T> = {
   data: T;
@@ -141,6 +141,56 @@ export async function updateSubcategoryApi(subcategoryId: string, name: string):
 
 export async function deleteSubcategoryApi(subcategoryId: string): Promise<boolean> {
   const url = buildApiUrl(`/api/admin/subcategories/${subcategoryId}`);
+  if (!url) {
+    return false;
+  }
+
+  const response = await fetch(url, { method: "DELETE" });
+  return response.ok;
+}
+
+export async function fetchSpeakersApi(): Promise<SpeakerItem[] | null> {
+  const url = buildApiUrl("/api/admin/speakers");
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url);
+  return parseEnvelope<SpeakerItem[]>(response);
+}
+
+export async function createSpeakerApi(name: string): Promise<SpeakerItem | null> {
+  const url = buildApiUrl("/api/admin/speakers");
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+  return parseEnvelope<SpeakerItem>(response);
+}
+
+export async function updateSpeakerApi(id: string, name: string): Promise<SpeakerItem | null> {
+  const url = buildApiUrl(`/api/admin/speakers/${id}`);
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+  return parseEnvelope<SpeakerItem>(response);
+}
+
+export async function deleteSpeakerApi(id: string): Promise<boolean> {
+  const url = buildApiUrl(`/api/admin/speakers/${id}`);
   if (!url) {
     return false;
   }
