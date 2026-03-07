@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import AssetsScripts from "../components/assets-scripts";
-import logoImg from "@/public/assets/images/logo-1.png";
-import heroImg from "@/public/assets/images/background/asset-14.jpeg";
 
 export const metadata: Metadata = {
   title: "Message Detail | LFC-JAHI MEDIA",
@@ -15,7 +13,7 @@ export default function SingleMessagePage() {
     <>
       <div id="gen-loading">
         <div id="gen-loading-center">
-          <Image src={logoImg} alt="loading" width={80} height={80} priority />
+          <Image src="/assets/images/logo-1.png" alt="loading" width={80} height={80} priority />
         </div>
       </div>
 
@@ -28,7 +26,7 @@ export default function SingleMessagePage() {
                   <Link className="navbar-brand" href="/">
                     <Image
                       className="img-fluid logo"
-                      src={logoImg}
+                      src="/assets/images/logo-1.png"
                       alt="LFC-JAHI MEDIA logo"
                       width={150}
                       height={40}
@@ -108,7 +106,7 @@ export default function SingleMessagePage() {
                 <Image
                   id="messageImage"
                   className="lfc-single-image"
-                  src={heroImg}
+                  src="/assets/images/background/asset-14.jpeg"
                   alt="Message image"
                   width={800}
                   height={450}

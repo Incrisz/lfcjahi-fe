@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import AssetsScripts from "./components/assets-scripts";
-import logoImg from "@/public/assets/images/logo-1.png";
 
 export const metadata: Metadata = {
   title: "LFC-JAHI MEDIA | Audio Messages",
@@ -14,7 +13,7 @@ export default function Home() {
     <>
       <div id="gen-loading">
         <div id="gen-loading-center">
-          <Image src={logoImg} alt="loading" width={80} height={80} priority />
+          <Image src="/assets/images/logo-1.png" alt="loading" width={80} height={80} priority />
         </div>
       </div>
 
@@ -27,7 +26,7 @@ export default function Home() {
                   <Link className="navbar-brand" href="/">
                     <Image
                       className="img-fluid logo"
-                      src={logoImg}
+                      src="/assets/images/logo-1.png"
                       alt="LFC-JAHI MEDIA logo"
                       width={150}
                       height={40}
@@ -219,7 +218,7 @@ export default function Home() {
                 <div className="col-xl-4 col-md-6">
                   <div className="widget">
                     <Image
-                      src={logoImg}
+                      src="/assets/images/logo-1.png"
                       className="gen-footer-logo"
                       alt="LFC-JAHI MEDIA logo"
                       width={150}
