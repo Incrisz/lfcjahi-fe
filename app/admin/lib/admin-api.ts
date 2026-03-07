@@ -1,4 +1,13 @@
-import { CategoryItem, EventItem, MediaItem, SpeakerItem, ThemeSettings } from "./admin-store";
+import {
+  CategoryItem,
+  DirectoryCellItem,
+  DirectoryDistrictItem,
+  DirectoryZoneItem,
+  EventItem,
+  MediaItem,
+  SpeakerItem,
+  ThemeSettings,
+} from "./admin-store";
 
 type ApiEnvelope<T> = {
   data: T;
@@ -9,11 +18,13 @@ type ApiErrorPayload = {
   errors?: Record<string, string[]>;
 };
 
+const DEFAULT_API_BASE_URL = "https://b.bmp.com.ng";
+
 function getApiBaseUrl(): string | null {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 
   if (!value) {
-    return null;
+    return DEFAULT_API_BASE_URL;
   }
 
   return value.replace(/\/+$/, "");
@@ -494,4 +505,161 @@ export async function createBlogPostApi(payload: BlogPostPayload): Promise<boole
   });
 
   return response.ok;
+}
+
+type SaveDistrictInput = {
+  name: string;
+  sortOrder: number;
+  coverageAreas: string;
+  homeCellPastors: string[];
+  homeCellMinister: string;
+  outreachPastor: string;
+  outreachMinister: string;
+  outreachLocation: string;
+};
+
+type SaveZoneInput = {
+  name: string;
+  sortOrder: number;
+  zoneMinister: string;
+};
+
+type SaveCellInput = {
+  name: string;
+  sortOrder: number;
+  address: string;
+  minister: string;
+  phone: string;
+};
+
+export async function fetchDistrictDirectoryApi(): Promise<DirectoryDistrictItem[] | null> {
+  const url = buildApiUrl("/api/admin/districts");
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url);
+  return parseEnvelope<DirectoryDistrictItem[]>(response);
+}
+
+export async function saveDistrictApi(
+  input: SaveDistrictInput,
+  id?: string,
+): Promise<DirectoryDistrictItem | null> {
+  const createUrl = buildApiUrl("/api/admin/districts");
+  const updateUrl = id ? buildApiUrl(`/api/admin/districts/${id}`) : null;
+
+  if (!createUrl || (id && !updateUrl)) {
+    return null;
+  }
+
+  const response = await fetch(id ? (updateUrl as string) : createUrl, {
+    method: id ? "PUT" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  return parseEnvelope<DirectoryDistrictItem>(response);
+}
+
+export async function deleteDistrictApi(id: string): Promise<boolean> {
+  const url = buildApiUrl(`/api/admin/districts/${id}`);
+  if (!url) {
+    return false;
+  }
+
+  const response = await fetch(url, { method: "DELETE" });
+  return ensureSuccess(response);
+}
+
+export async function createDistrictZoneApi(
+  districtId: string,
+  input: SaveZoneInput,
+): Promise<DirectoryZoneItem | null> {
+  const url = buildApiUrl(`/api/admin/districts/${districtId}/zones`);
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  return parseEnvelope<DirectoryZoneItem>(response);
+}
+
+export async function updateDistrictZoneApi(
+  zoneId: string,
+  input: SaveZoneInput,
+): Promise<DirectoryZoneItem | null> {
+  const url = buildApiUrl(`/api/admin/district-zones/${zoneId}`);
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  return parseEnvelope<DirectoryZoneItem>(response);
+}
+
+export async function deleteDistrictZoneApi(zoneId: string): Promise<boolean> {
+  const url = buildApiUrl(`/api/admin/district-zones/${zoneId}`);
+  if (!url) {
+    return false;
+  }
+
+  const response = await fetch(url, { method: "DELETE" });
+  return ensureSuccess(response);
+}
+
+export async function createHomeCellApi(
+  zoneId: string,
+  input: SaveCellInput,
+): Promise<DirectoryCellItem | null> {
+  const url = buildApiUrl(`/api/admin/district-zones/${zoneId}/cells`);
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  return parseEnvelope<DirectoryCellItem>(response);
+}
+
+export async function updateHomeCellApi(
+  cellId: string,
+  input: SaveCellInput,
+): Promise<DirectoryCellItem | null> {
+  const url = buildApiUrl(`/api/admin/home-cells/${cellId}`);
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  return parseEnvelope<DirectoryCellItem>(response);
+}
+
+export async function deleteHomeCellApi(cellId: string): Promise<boolean> {
+  const url = buildApiUrl(`/api/admin/home-cells/${cellId}`);
+  if (!url) {
+    return false;
+  }
+
+  const response = await fetch(url, { method: "DELETE" });
+  return ensureSuccess(response);
 }

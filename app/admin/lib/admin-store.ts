@@ -51,11 +51,42 @@ export type ThemeSettings = {
   layoutStyle: "standard" | "wide" | "compact";
 };
 
+export type DirectoryCellItem = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  address: string;
+  minister: string;
+  phone: string;
+};
+
+export type DirectoryZoneItem = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  zoneMinister: string;
+  cells: DirectoryCellItem[];
+};
+
+export type DirectoryDistrictItem = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  coverageAreas: string;
+  homeCellPastors: string[];
+  homeCellMinister: string;
+  outreachPastor: string;
+  outreachMinister: string;
+  outreachLocation: string;
+  zones: DirectoryZoneItem[];
+};
+
 const MEDIA_KEY = "lfcjahi_admin_media_items";
 const EVENTS_KEY = "lfcjahi_admin_events";
 const THEME_KEY = "lfcjahi_admin_theme_settings";
 const CATEGORY_TREE_KEY = "lfcjahi_admin_category_tree";
 const SPEAKERS_KEY = "lfcjahi_admin_speakers";
+const DISTRICT_DIRECTORY_KEY = "lfcjahi_admin_district_directory";
 
 export const AUTH_KEY = "lfcjahi_admin_auth";
 export const USER_KEY = "lfcjahi_admin_user";
@@ -198,6 +229,50 @@ function normalizeSpeakers(items: SpeakerItem[]): SpeakerItem[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function normalizeDirectory(items: DirectoryDistrictItem[]): DirectoryDistrictItem[] {
+  return items
+    .filter((district) => district && district.name)
+    .map((district, districtIndex) => ({
+      id: district.id || `local-district-${districtIndex}`,
+      name: district.name.trim(),
+      sortOrder: Number.isFinite(Number(district.sortOrder)) ? Number(district.sortOrder) : districtIndex + 1,
+      coverageAreas: (district.coverageAreas || "").trim(),
+      homeCellPastors: Array.isArray(district.homeCellPastors)
+        ? district.homeCellPastors.map((item) => String(item || "").trim()).filter(Boolean)
+        : [],
+      homeCellMinister: (district.homeCellMinister || "").trim(),
+      outreachPastor: (district.outreachPastor || "").trim(),
+      outreachMinister: (district.outreachMinister || "").trim(),
+      outreachLocation: (district.outreachLocation || "").trim(),
+      zones: Array.isArray(district.zones)
+        ? district.zones
+            .filter((zone) => zone && zone.name)
+            .map((zone, zoneIndex) => ({
+              id: zone.id || `local-zone-${districtIndex}-${zoneIndex}`,
+              name: zone.name.trim(),
+              sortOrder: Number.isFinite(Number(zone.sortOrder)) ? Number(zone.sortOrder) : zoneIndex + 1,
+              zoneMinister: (zone.zoneMinister || "").trim(),
+              cells: Array.isArray(zone.cells)
+                ? zone.cells
+                    .filter((cell) => cell && cell.name)
+                    .map((cell, cellIndex) => ({
+                      id: cell.id || `local-cell-${districtIndex}-${zoneIndex}-${cellIndex}`,
+                      name: cell.name.trim(),
+                      sortOrder: Number.isFinite(Number(cell.sortOrder)) ? Number(cell.sortOrder) : cellIndex + 1,
+                      address: (cell.address || "").trim(),
+                      minister: (cell.minister || "").trim(),
+                      phone: (cell.phone || "").trim(),
+                    }))
+                    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+                : [],
+            }))
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+        : [],
+    }))
+    .filter((district) => district.name.length > 0)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+}
+
 export function loadCategoryTree(): CategoryItem[] {
   if (!canUseStorage()) {
     return DEFAULT_CATEGORY_TREE;
@@ -329,6 +404,23 @@ export function saveThemeSettings(settings: ThemeSettings): void {
   }
 
   window.localStorage.setItem(THEME_KEY, JSON.stringify(settings));
+}
+
+export function loadDistrictDirectory(): DirectoryDistrictItem[] {
+  if (!canUseStorage()) {
+    return [];
+  }
+
+  const items = parseJson<DirectoryDistrictItem[]>(window.localStorage.getItem(DISTRICT_DIRECTORY_KEY), []);
+  return normalizeDirectory(items);
+}
+
+export function saveDistrictDirectory(items: DirectoryDistrictItem[]): void {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  window.localStorage.setItem(DISTRICT_DIRECTORY_KEY, JSON.stringify(normalizeDirectory(items)));
 }
 
 export function createId(prefix: string): string {
