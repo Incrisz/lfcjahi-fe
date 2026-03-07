@@ -91,7 +91,7 @@ export const DEFAULT_CATEGORY_TREE: CategoryItem[] = [
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   churchName: "LFC Jahi",
-  logoUrl: "/assets/images/logo-1.png",
+  logoUrl: "/lfc-assets/images/logo-1.png",
   tagline: "Raising Kingdom Voices",
   primaryColor: "#0a4d68",
   accentColor: "#f2994a",

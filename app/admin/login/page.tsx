@@ -53,7 +53,7 @@ export default function AdminLoginPage() {
       <section className={styles.card}>
         <div className={styles.brandRow}>
           <Image
-            src="/assets/images/logo-1.png"
+            src="/lfc-assets/images/logo-1.png"
             alt="LFC Jahi"
             className={styles.logo}
             width={60}

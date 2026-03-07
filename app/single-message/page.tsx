@@ -13,7 +13,7 @@ export default function SingleMessagePage() {
     <>
       <div id="gen-loading">
         <div id="gen-loading-center">
-          <Image src="/assets/images/logo-1.png" alt="loading" width={80} height={80} priority />
+          <Image src="/lfc-assets/images/logo-1.png" alt="loading" width={80} height={80} priority />
         </div>
       </div>
 
@@ -26,7 +26,7 @@ export default function SingleMessagePage() {
                   <Link className="navbar-brand" href="/">
                     <Image
                       className="img-fluid logo"
-                      src="/assets/images/logo-1.png"
+                      src="/lfc-assets/images/logo-1.png"
                       alt="LFC-JAHI MEDIA logo"
                       width={150}
                       height={40}
@@ -106,7 +106,7 @@ export default function SingleMessagePage() {
                 <Image
                   id="messageImage"
                   className="lfc-single-image"
-                  src="/assets/images/background/asset-14.jpeg"
+                  src="/lfc-assets/images/background/asset-14.jpeg"
                   alt="Message image"
                   width={800}
                   height={450}

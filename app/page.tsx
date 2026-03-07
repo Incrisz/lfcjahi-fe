@@ -13,7 +13,7 @@ export default function Home() {
     <>
       <div id="gen-loading">
         <div id="gen-loading-center">
-          <Image src="/assets/images/logo-1.png" alt="loading" width={80} height={80} priority />
+          <Image src="/lfc-assets/images/logo-1.png" alt="loading" width={80} height={80} priority />
         </div>
       </div>
 
@@ -26,7 +26,7 @@ export default function Home() {
                   <Link className="navbar-brand" href="/">
                     <Image
                       className="img-fluid logo"
-                      src="/assets/images/logo-1.png"
+                      src="/lfc-assets/images/logo-1.png"
                       alt="LFC-JAHI MEDIA logo"
                       width={150}
                       height={40}
@@ -218,7 +218,7 @@ export default function Home() {
                 <div className="col-xl-4 col-md-6">
                   <div className="widget">
                     <Image
-                      src="/assets/images/logo-1.png"
+                      src="/lfc-assets/images/logo-1.png"
                       className="gen-footer-logo"
                       alt="LFC-JAHI MEDIA logo"
                       width={150}

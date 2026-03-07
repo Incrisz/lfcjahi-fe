@@ -26,7 +26,7 @@ export default function AssetsScripts({ pageScript }: AssetsScriptsProps) {
           key={name}
           id={`asset-${name.replace(/\./g, "-")}`}
           strategy="beforeInteractive"
-          src={`/assets/js/${name}`}
+          src={`/lfc-assets/js/${name}`}
         />
       ))}
 
@@ -36,7 +36,7 @@ export default function AssetsScripts({ pageScript }: AssetsScriptsProps) {
           key={name}
           id={`asset-${name.replace(/\./g, "-")}`}
           strategy="afterInteractive"
-          src={`/assets/js/${name}`}
+          src={`/lfc-assets/js/${name}`}
         />
       ))}
 
@@ -44,7 +44,7 @@ export default function AssetsScripts({ pageScript }: AssetsScriptsProps) {
       <Script
         id={`asset-${pageScript.replace(/\./g, "-")}`}
         strategy="afterInteractive"
-        src={`/assets/js/${pageScript}`}
+        src={`/lfc-assets/js/${pageScript}`}
       />
     </>
   );
