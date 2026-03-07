@@ -23,7 +23,7 @@ import {
 
 type SortMode = "newest" | "oldest" | "speaker" | "category";
 
-type QueryStatus = "" | "created" | "updated";
+type QueryStatus = "" | "created" | "updated" | "bulk-created";
 
 function subscribeLocation(callback: () => void): () => void {
   if (typeof window === "undefined") {
@@ -40,7 +40,7 @@ function getQueryStatusClientSnapshot(): QueryStatus {
   }
 
   const status = new URLSearchParams(window.location.search).get("status");
-  if (status === "created" || status === "updated") {
+  if (status === "created" || status === "updated" || status === "bulk-created") {
     return status;
   }
 
@@ -206,6 +206,8 @@ export default function AdminMediaLibraryPage() {
       ? "Media added successfully."
       : queryStatus === "updated"
         ? "Media updated successfully."
+        : queryStatus === "bulk-created"
+          ? "Bulk media added successfully."
         : "");
 
   return (
@@ -219,6 +221,9 @@ export default function AdminMediaLibraryPage() {
         <div className={styles.inlineActions}>
           <Link className={styles.buttonPrimary} href="/admin/media-library/new">
             Add New Media
+          </Link>
+          <Link className={styles.buttonSecondary} href="/admin/media-library/bulk">
+            Bulk Add Media
           </Link>
           <Link className={styles.buttonSecondary} href="/admin/categories">
             Manage Categories

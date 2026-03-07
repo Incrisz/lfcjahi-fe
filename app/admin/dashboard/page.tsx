@@ -89,6 +89,9 @@ export default function AdminDashboardPage() {
           <Link className={styles.linkButton} href="/admin/media-library/new">
             Add New Media
           </Link>
+          <Link className={styles.buttonSecondary} href="/admin/media-library/bulk">
+            Bulk Add Media
+          </Link>
           <Link className={styles.buttonSecondary} href="/admin/events">
             Manage Events
           </Link>

@@ -1,0 +1,615 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import styles from "../../admin-pages.module.css";
+import AdminShell from "../../components/admin-shell";
+import {
+  MediaCategory,
+  MediaItem,
+  SpeakerItem,
+  createId,
+  getCategoryNames,
+  getSpeakerNames,
+  getSubcategoryNames,
+  loadCategoryTree,
+  loadMediaItems,
+  loadSpeakers,
+  saveCategoryTree,
+  saveMediaItems,
+  saveSpeakers,
+} from "../../lib/admin-store";
+import {
+  fetchCategoriesApi,
+  fetchMediaItemsApi,
+  fetchSpeakersApi,
+  hasApiBaseUrl,
+  saveMediaItemApi,
+} from "../../lib/admin-api";
+
+type AudioSourceMode = "link" | "file";
+
+type BulkMediaRow = {
+  id: string;
+  speaker: string;
+  title: string;
+  description: string;
+  mediaDate: string;
+  thumbnailFile: File | null;
+  thumbnailPreviewUrl: string;
+  audioSourceMode: AudioSourceMode;
+  audioLink: string;
+  audioFile: File | null;
+};
+
+function createEmptyRow(): BulkMediaRow {
+  return {
+    id: createId("bulk-media"),
+    speaker: "",
+    title: "",
+    description: "",
+    mediaDate: "",
+    thumbnailFile: null,
+    thumbnailPreviewUrl: "",
+    audioSourceMode: "link",
+    audioLink: "",
+    audioFile: null,
+  };
+}
+
+function isAudioCategory(category: string): boolean {
+  return category.trim().toLowerCase() === "audio";
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+export default function AdminBulkMediaPage() {
+  const router = useRouter();
+
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [categoryTree, setCategoryTree] = useState(loadCategoryTree);
+  const [speakers, setSpeakers] = useState<SpeakerItem[]>(loadSpeakers);
+  const [category, setCategory] = useState<MediaCategory>("");
+  const [subcategory, setSubcategory] = useState("");
+  const [isPublished, setIsPublished] = useState(true);
+  const [rows, setRows] = useState<BulkMediaRow[]>([createEmptyRow(), createEmptyRow(), createEmptyRow()]);
+  const [isReady, setIsReady] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function initializePage() {
+      let nextCategoryTree = loadCategoryTree();
+      let nextMediaItems = loadMediaItems();
+      let nextSpeakers = loadSpeakers();
+
+      try {
+        const [remoteCategories, remoteMediaItems, remoteSpeakers] = await Promise.all([
+          fetchCategoriesApi(),
+          fetchMediaItemsApi(),
+          fetchSpeakersApi(),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        if (remoteCategories && remoteCategories.length > 0) {
+          nextCategoryTree = remoteCategories;
+          saveCategoryTree(remoteCategories);
+        }
+
+        if (remoteMediaItems) {
+          nextMediaItems = remoteMediaItems;
+          saveMediaItems(remoteMediaItems);
+        }
+
+        if (remoteSpeakers) {
+          nextSpeakers = remoteSpeakers;
+          saveSpeakers(remoteSpeakers);
+        }
+      } catch {
+        // keep local fallback state
+      }
+
+      if (!isActive) {
+        return;
+      }
+
+      const categoryNames = getCategoryNames(nextCategoryTree);
+      const fallbackCategory = categoryNames[0] || "";
+      const fallbackSubcategory = getSubcategoryNames(nextCategoryTree, fallbackCategory)[0] || "";
+
+      setMediaItems(nextMediaItems);
+      setCategoryTree(nextCategoryTree);
+      setSpeakers(nextSpeakers);
+      setCategory(fallbackCategory);
+      setSubcategory(fallbackSubcategory);
+      setIsReady(true);
+    }
+
+    void initializePage();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const speakerOptions = useMemo(() => getSpeakerNames(speakers), [speakers]);
+  const categoryOptions = useMemo(() => getCategoryNames(categoryTree), [categoryTree]);
+  const subcategoryOptions = useMemo(
+    () => getSubcategoryNames(categoryTree, category),
+    [category, categoryTree],
+  );
+
+  async function handleThumbnailSelection(rowId: string, file: File | null) {
+    if (!file) {
+      updateRow(rowId, {
+        thumbnailFile: null,
+        thumbnailPreviewUrl: "",
+      });
+      return;
+    }
+
+    try {
+      const preview = await fileToDataUrl(file);
+      updateRow(rowId, {
+        thumbnailFile: file,
+        thumbnailPreviewUrl: preview,
+      });
+    } catch {
+      updateRow(rowId, {
+        thumbnailFile: file,
+        thumbnailPreviewUrl: "",
+      });
+    }
+  }
+
+  function updateRow(rowId: string, patch: Partial<BulkMediaRow>) {
+    setRows((current) =>
+      current.map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              ...patch,
+            }
+          : row,
+      ),
+    );
+  }
+
+  function addRow() {
+    setRows((current) => [...current, createEmptyRow()]);
+  }
+
+  function removeRow(rowId: string) {
+    setRows((current) => {
+      if (current.length === 1) {
+        return [createEmptyRow()];
+      }
+
+      return current.filter((row) => row.id !== rowId);
+    });
+  }
+
+  function handleCategoryChange(nextCategory: string) {
+    setCategory(nextCategory);
+    const nextSubcategories = getSubcategoryNames(categoryTree, nextCategory);
+    setSubcategory(nextSubcategories[0] || "");
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSaving) {
+      return;
+    }
+
+    setStatus("");
+
+    if (!category.trim()) {
+      setStatus("Please select a category.");
+      return;
+    }
+
+    const activeRows = rows.filter((row) =>
+      [row.title, row.description, row.mediaDate, row.audioLink, row.audioFile?.name || ""].some((value) =>
+        String(value || "").trim(),
+      ),
+    );
+
+    if (activeRows.length === 0) {
+      setStatus("Add at least one media row.");
+      return;
+    }
+
+    const audioCategory = isAudioCategory(category);
+    const apiConfigured = hasApiBaseUrl();
+
+    setIsSaving(true);
+
+    const createdItems: MediaItem[] = [];
+    const failedRows: Array<{ rowId: string; message: string }> = [];
+
+    for (const [index, row] of activeRows.entries()) {
+      const speaker = row.speaker.trim();
+      if (!speaker) {
+        failedRows.push({ rowId: row.id, message: `Row ${index + 1}: speaker is required.` });
+        continue;
+      }
+
+      const title = row.title.trim();
+      if (!title) {
+        failedRows.push({ rowId: row.id, message: `Row ${index + 1}: title is required.` });
+        continue;
+      }
+
+      let resolvedMediaUrl = "";
+      let resolvedMediaSourceType: "link" | "file" | "" = "";
+      let resolvedThumbnailUrl = "";
+
+      if (row.thumbnailFile && !apiConfigured) {
+        try {
+          resolvedThumbnailUrl = await fileToDataUrl(row.thumbnailFile);
+        } catch {
+          failedRows.push({ rowId: row.id, message: `Row ${index + 1}: failed to read thumbnail image.` });
+          continue;
+        }
+      }
+
+      if (audioCategory) {
+        resolvedMediaSourceType = row.audioSourceMode;
+
+        if (row.audioSourceMode === "link") {
+          if (!row.audioLink.trim()) {
+            failedRows.push({ rowId: row.id, message: `Row ${index + 1}: audio link is required.` });
+            continue;
+          }
+
+          resolvedMediaUrl = row.audioLink.trim();
+        } else {
+          if (!row.audioFile) {
+            failedRows.push({ rowId: row.id, message: `Row ${index + 1}: audio file is required.` });
+            continue;
+          }
+
+          if (!apiConfigured) {
+            try {
+              resolvedMediaUrl = await fileToDataUrl(row.audioFile);
+            } catch {
+              failedRows.push({ rowId: row.id, message: `Row ${index + 1}: failed to read audio file.` });
+              continue;
+            }
+          }
+        }
+      }
+
+      const localFallbackItem: MediaItem = {
+        id: createId("media"),
+        title,
+        description: row.description.trim(),
+        category,
+        subcategory,
+        speaker,
+        mediaDate: row.mediaDate.trim(),
+        thumbnailUrl: resolvedThumbnailUrl,
+        mediaUrl: resolvedMediaUrl,
+        mediaSourceType: resolvedMediaSourceType,
+        isPublished,
+        createdAt: new Date().toISOString(),
+      };
+
+      try {
+        const remoteItem = await saveMediaItemApi(
+          {
+            title: localFallbackItem.title,
+            description: localFallbackItem.description,
+            category: localFallbackItem.category,
+            subcategory: localFallbackItem.subcategory,
+            speaker: localFallbackItem.speaker,
+            mediaDate: localFallbackItem.mediaDate,
+            mediaSourceType: localFallbackItem.mediaSourceType || "",
+            mediaUrl: resolvedMediaUrl,
+            thumbnailUrl: resolvedThumbnailUrl,
+            thumbnailFile: row.thumbnailFile,
+            audioFile: row.audioFile,
+            isPublished,
+          },
+          undefined,
+        );
+
+        if (remoteItem) {
+          createdItems.push(remoteItem);
+        } else if (!apiConfigured) {
+          createdItems.push(localFallbackItem);
+        } else {
+          failedRows.push({ rowId: row.id, message: `Row ${index + 1}: unable to save on the server.` });
+        }
+      } catch (error) {
+        if (!apiConfigured) {
+          createdItems.push(localFallbackItem);
+        } else {
+          failedRows.push({
+            rowId: row.id,
+            message: `Row ${index + 1}: ${error instanceof Error ? error.message : "save failed."}`,
+          });
+        }
+      }
+    }
+
+    if (createdItems.length > 0) {
+      const nextMediaItems = [...createdItems, ...mediaItems];
+      setMediaItems(nextMediaItems);
+      saveMediaItems(nextMediaItems);
+    }
+
+    if (failedRows.length === 0) {
+      router.push("/admin/media-library?status=bulk-created");
+      return;
+    }
+
+    const failedIds = new Set(failedRows.map((entry) => entry.rowId));
+    setRows((current) => current.filter((row) => failedIds.has(row.id)));
+    setStatus(
+      `${createdItems.length} item(s) added. ${failedRows.length} row(s) need attention: ${failedRows
+        .map((entry) => entry.message)
+        .join(" ")}`,
+    );
+    setIsSaving(false);
+  }
+
+  if (!isReady) {
+    return (
+      <AdminShell title="Bulk Add Media">
+        <section className={styles.panel}>
+          <p className={styles.panelText}>Loading bulk media form...</p>
+        </section>
+      </AdminShell>
+    );
+  }
+
+  return (
+    <AdminShell title="Bulk Add Media">
+      <section className={styles.panel}>
+        <h2 className={styles.panelTitle}>Bulk Media Entry</h2>
+        <p className={styles.panelText}>
+          Create multiple media items with shared category, subcategory, and publish settings while keeping speaker and thumbnail per row.
+        </p>
+        <div className={styles.inlineActions}>
+          <Link className={styles.buttonSecondary} href="/admin/speakers">
+            Manage Speakers
+          </Link>
+          <Link className={styles.buttonSecondary} href="/admin/media-library">
+            Back to Media Library
+          </Link>
+        </div>
+      </section>
+
+      <section className={styles.panel}>
+        <form className={styles.formGrid} onSubmit={handleSubmit}>
+          <div className={styles.field}>
+            <label htmlFor="bulkCategory">Category</label>
+            <select id="bulkCategory" value={category} onChange={(event) => handleCategoryChange(event.target.value)}>
+              {categoryOptions.map((categoryOption) => (
+                <option key={categoryOption} value={categoryOption}>
+                  {categoryOption}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor="bulkSubcategory">Subcategory</label>
+            <select id="bulkSubcategory" value={subcategory} onChange={(event) => setSubcategory(event.target.value)}>
+              <option value="">No subcategory</option>
+              {subcategoryOptions.map((subOption) => (
+                <option key={subOption} value={subOption}>
+                  {subOption}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor="bulkPublish">Publish</label>
+            <select
+              id="bulkPublish"
+              value={isPublished ? "published" : "draft"}
+              onChange={(event) => setIsPublished(event.target.value === "published")}
+            >
+              <option value="published">Published</option>
+              <option value="draft">Unpublished</option>
+            </select>
+          </div>
+
+          <div className={`${styles.inlineActions} ${styles.formGridFull}`} style={{ justifyContent: "space-between" }}>
+            <div>
+              <h3 className={styles.panelTitle} style={{ fontSize: 18 }}>Item Rows</h3>
+              <p className={styles.panelText} style={{ marginBottom: 0 }}>
+                Fill one row per media item. Audio rows support either a link or a direct file upload.
+              </p>
+            </div>
+            <button type="button" className={styles.buttonSecondary} onClick={addRow}>
+              Add Row
+            </button>
+          </div>
+
+          <div className={`${styles.formGridFull} ${styles.tableWrap}`}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Speaker</th>
+                  <th>Title</th>
+                  <th>Date</th>
+                  <th>Thumbnail</th>
+                  <th>Description</th>
+                  {isAudioCategory(category) ? <th>Source</th> : null}
+                  {isAudioCategory(category) ? <th>Audio Link / File</th> : null}
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={row.id}>
+                    <td>
+                      <select
+                        className={styles.inlineInput}
+                        value={row.speaker}
+                        onChange={(event) => updateRow(row.id, { speaker: event.target.value })}
+                      >
+                        <option value="">Select speaker</option>
+                        {speakerOptions.map((speakerName) => (
+                          <option key={speakerName} value={speakerName}>
+                            {speakerName}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        className={styles.inlineInput}
+                        value={row.title}
+                        onChange={(event) => updateRow(row.id, { title: event.target.value })}
+                        placeholder={`Item ${index + 1} title`}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className={styles.inlineInput}
+                        type="date"
+                        value={row.mediaDate}
+                        onChange={(event) => updateRow(row.id, { mediaDate: event.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <div className={styles.uploadCard} style={{ minWidth: 210 }}>
+                        <input
+                          id={`bulk-thumb-${row.id}`}
+                          className={styles.hiddenFileInput}
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) => void handleThumbnailSelection(row.id, event.target.files?.[0] || null)}
+                        />
+                        <label htmlFor={`bulk-thumb-${row.id}`} className={styles.fileTrigger}>
+                          Choose Image
+                        </label>
+                        {row.thumbnailFile ? (
+                          <p className={styles.fileName}>{row.thumbnailFile.name}</p>
+                        ) : (
+                          <p className={styles.uploadSubtext}>No image selected</p>
+                        )}
+                        {row.thumbnailPreviewUrl ? (
+                          <div className={styles.uploadPreviewWrap}>
+                            <img
+                              src={row.thumbnailPreviewUrl}
+                              alt={`${row.title || `Item ${index + 1}`} thumbnail preview`}
+                              className={styles.uploadPreview}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>
+                      <textarea
+                        className={styles.inlineInput}
+                        value={row.description}
+                        onChange={(event) => updateRow(row.id, { description: event.target.value })}
+                        placeholder="Optional description"
+                        style={{ minWidth: 260, minHeight: 84 }}
+                      />
+                    </td>
+                    {isAudioCategory(category) ? (
+                      <td>
+                        <div className={styles.toggleGroup}>
+                          <button
+                            type="button"
+                            className={`${styles.toggleButton} ${
+                              row.audioSourceMode === "link" ? styles.toggleButtonActive : ""
+                            }`}
+                            onClick={() => updateRow(row.id, { audioSourceMode: "link", audioFile: null })}
+                          >
+                            Link
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.toggleButton} ${
+                              row.audioSourceMode === "file" ? styles.toggleButtonActive : ""
+                            }`}
+                            onClick={() => updateRow(row.id, { audioSourceMode: "file", audioLink: "" })}
+                          >
+                            File
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
+                    {isAudioCategory(category) ? (
+                      <td>
+                        {row.audioSourceMode === "link" ? (
+                          <input
+                            className={styles.inlineInput}
+                            value={row.audioLink}
+                            onChange={(event) => updateRow(row.id, { audioLink: event.target.value })}
+                            placeholder="https://.../message.mp3"
+                            style={{ minWidth: 260 }}
+                          />
+                        ) : (
+                          <div className={styles.uploadCard} style={{ minWidth: 260 }}>
+                            <input
+                              id={`bulk-audio-${row.id}`}
+                              className={styles.hiddenFileInput}
+                              type="file"
+                              accept="audio/*"
+                              onChange={(event) =>
+                                updateRow(row.id, {
+                                  audioFile: event.target.files?.[0] || null,
+                                })
+                              }
+                            />
+                            <label htmlFor={`bulk-audio-${row.id}`} className={styles.fileTrigger}>
+                              Choose Audio File
+                            </label>
+                            <p className={styles.fileName}>{row.audioFile ? row.audioFile.name : "No file selected"}</p>
+                          </div>
+                        )}
+                      </td>
+                    ) : null}
+                    <td>
+                      <div className={styles.listActions}>
+                        <button type="button" className={styles.buttonDanger} onClick={() => removeRow(row.id)}>
+                          Remove
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className={`${styles.inlineActions} ${styles.formGridFull}`}>
+            <button className={styles.buttonPrimary} type="submit" disabled={isSaving || speakerOptions.length === 0}>
+              {isSaving ? "Saving..." : "Save Bulk Media"}
+            </button>
+            <button type="button" className={styles.buttonSecondary} onClick={addRow}>
+              Add Another Row
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {speakerOptions.length === 0 ? (
+        <p className={styles.status}>Add at least one speaker before using bulk media entry.</p>
+      ) : null}
+      {status ? <p className={styles.status}>{status}</p> : null}
+    </AdminShell>
+  );
+}
