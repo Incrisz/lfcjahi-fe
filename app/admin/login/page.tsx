@@ -2,7 +2,9 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import styles from "./login.module.css";
+import logoImg from "@/public/assets/images/logo-1.png";
 
 const ADMIN_USERNAME = "admin@lfcjahi.com";
 const ADMIN_PASSWORD = "12345678";
@@ -51,10 +53,12 @@ export default function AdminLoginPage() {
 
       <section className={styles.card}>
         <div className={styles.brandRow}>
-          <img
-            src="/assets/images/logo-1.png"
+          <Image
+            src={logoImg}
             alt="LFC Jahi"
             className={styles.logo}
+            width={60}
+            height={60}
           />
           <div>
             <p className={styles.brandKicker}>Admin Portal</p>

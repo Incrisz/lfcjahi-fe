@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import AssetsScripts from "../components/assets-scripts";
+import logoImg from "@/public/assets/images/logo-1.png";
+import heroImg from "@/public/assets/images/background/asset-14.jpeg";
 
 export const metadata: Metadata = {
   title: "Message Detail | LFC-JAHI MEDIA",
@@ -12,7 +15,7 @@ export default function SingleMessagePage() {
     <>
       <div id="gen-loading">
         <div id="gen-loading-center">
-          <img src="/assets/images/logo-1.png" alt="loading" />
+          <Image src={logoImg} alt="loading" width={80} height={80} priority />
         </div>
       </div>
 
@@ -23,10 +26,13 @@ export default function SingleMessagePage() {
               <div className="col-lg-12">
                 <nav className="navbar navbar-expand-lg navbar-light">
                   <Link className="navbar-brand" href="/">
-                    <img
+                    <Image
                       className="img-fluid logo"
-                      src="/assets/images/logo-1.png"
+                      src={logoImg}
                       alt="LFC-JAHI MEDIA logo"
+                      width={150}
+                      height={40}
+                      priority
                     />
                   </Link>
                   <div className="collapse navbar-collapse" id="navbarSupportedContent">
@@ -99,11 +105,14 @@ export default function SingleMessagePage() {
           <div className="row">
             <div className="col-lg-8 mb-4">
               <div className="lfc-single-card">
-                <img
+                <Image
                   id="messageImage"
                   className="lfc-single-image"
-                  src="/assets/images/background/asset-14.jpeg"
+                  src={heroImg}
                   alt="Message image"
+                  width={800}
+                  height={450}
+                  priority
                 />
                 <audio id="audioPlayer" className="lfc-audio" controls preload="none">
                   Your browser does not support the audio element.
