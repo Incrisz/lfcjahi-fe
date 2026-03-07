@@ -47,6 +47,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [categoryTree, setCategoryTree] = useState(loadCategoryTree);
   const [isReady, setIsReady] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState("");
 
   const [title, setTitle] = useState("");
@@ -217,15 +218,19 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSaving) return;
     setStatus("");
+    setIsSaving(true);
 
     if (!title.trim()) {
       setStatus("Title is required.");
+      setIsSaving(false);
       return;
     }
 
     if (!category.trim()) {
       setStatus("Please add at least one category first.");
+      setIsSaving(false);
       return;
     }
 
@@ -241,12 +246,14 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       if (audioSourceMode === "link") {
         if (!asString(audioLink).trim()) {
           setStatus("Audio link is required.");
+          setIsSaving(false);
           return;
         }
         resolvedMediaUrl = asString(audioLink).trim();
       } else {
         if (!audioFile && !isEditing) {
           setStatus("Please choose an audio file.");
+          setIsSaving(false);
           return;
         }
 
@@ -255,12 +262,14 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             resolvedMediaUrl = await fileToDataUrl(audioFile);
           } catch {
             setStatus("Failed to read selected audio file.");
+            setIsSaving(false);
             return;
           }
         } else if (!audioFile && existingMediaUrl.trim()) {
           resolvedMediaUrl = existingMediaUrl.trim();
         } else if (!audioFile) {
           setStatus("Please choose an audio file.");
+          setIsSaving(false);
           return;
         }
       }
@@ -318,6 +327,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       } else {
         if (apiConfigured) {
           setStatus("Unable to save media on the server.");
+          setIsSaving(false);
           return;
         }
 
@@ -332,6 +342,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
     } catch (error) {
       if (apiConfigured) {
         setStatus(error instanceof Error ? error.message : "Audio upload failed. Please try again.");
+        setIsSaving(false);
         return;
       }
 
@@ -343,6 +354,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       setMediaItems(nextMediaItems);
       saveMediaItems(nextMediaItems);
       setStatus("Saved locally because API is not configured.");
+      setIsSaving(false);
       return;
     }
 
@@ -559,8 +571,8 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
           ) : null}
 
           <div className={`${styles.inlineActions} ${styles.formGridFull}`}>
-            <button className={styles.buttonPrimary} type="submit">
-              {isEditing ? "Update Media" : "Save Media"}
+            <button className={styles.buttonPrimary} type="submit" disabled={isSaving}>
+              {isSaving ? "Saving..." : isEditing ? "Update Media" : "Save Media"}
             </button>
             <button
               className={styles.buttonSecondary}
