@@ -83,6 +83,8 @@ export default function AdminBulkMediaPage() {
   const [rows, setRows] = useState<BulkMediaRow[]>([createEmptyRow(), createEmptyRow(), createEmptyRow()]);
   const [isReady, setIsReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
   const [status, setStatus] = useState("");
 
   useEffect(() => {
@@ -215,6 +217,8 @@ export default function AdminBulkMediaPage() {
     }
 
     setStatus("");
+    setUploadProgress(0);
+    setProgressLabel("");
 
     if (!category.trim()) {
       setStatus("Please select a category.");
@@ -239,17 +243,29 @@ export default function AdminBulkMediaPage() {
 
     const createdItems: MediaItem[] = [];
     const failedRows: Array<{ rowId: string; message: string }> = [];
+    const totalRows = activeRows.length;
+
+    function updateBatchProgress(rowIndex: number, rowPercent: number) {
+      const normalized = Math.max(0, Math.min(100, rowPercent));
+      const overall = Math.round(((rowIndex + normalized / 100) / totalRows) * 100);
+      setUploadProgress(overall);
+      setProgressLabel(`Saving item ${Math.min(rowIndex + 1, totalRows)} of ${totalRows}`);
+    }
 
     for (const [index, row] of activeRows.entries()) {
+      updateBatchProgress(index, 0);
+
       const speaker = row.speaker.trim();
       if (!speaker) {
         failedRows.push({ rowId: row.id, message: `Row ${index + 1}: speaker is required.` });
+        updateBatchProgress(index, 100);
         continue;
       }
 
       const title = row.title.trim();
       if (!title) {
         failedRows.push({ rowId: row.id, message: `Row ${index + 1}: title is required.` });
+        updateBatchProgress(index, 100);
         continue;
       }
 
@@ -262,6 +278,7 @@ export default function AdminBulkMediaPage() {
           resolvedThumbnailUrl = await fileToDataUrl(row.thumbnailFile);
         } catch {
           failedRows.push({ rowId: row.id, message: `Row ${index + 1}: failed to read thumbnail image.` });
+          updateBatchProgress(index, 100);
           continue;
         }
       }
@@ -272,6 +289,7 @@ export default function AdminBulkMediaPage() {
         if (row.audioSourceMode === "link") {
           if (!row.audioLink.trim()) {
             failedRows.push({ rowId: row.id, message: `Row ${index + 1}: audio link is required.` });
+            updateBatchProgress(index, 100);
             continue;
           }
 
@@ -279,6 +297,7 @@ export default function AdminBulkMediaPage() {
         } else {
           if (!row.audioFile) {
             failedRows.push({ rowId: row.id, message: `Row ${index + 1}: audio file is required.` });
+            updateBatchProgress(index, 100);
             continue;
           }
 
@@ -287,6 +306,7 @@ export default function AdminBulkMediaPage() {
               resolvedMediaUrl = await fileToDataUrl(row.audioFile);
             } catch {
               failedRows.push({ rowId: row.id, message: `Row ${index + 1}: failed to read audio file.` });
+              updateBatchProgress(index, 100);
               continue;
             }
           }
@@ -325,6 +345,7 @@ export default function AdminBulkMediaPage() {
             isPublished,
           },
           undefined,
+          (percent) => updateBatchProgress(index, percent),
         );
 
         if (remoteItem) {
@@ -344,6 +365,8 @@ export default function AdminBulkMediaPage() {
           });
         }
       }
+
+      updateBatchProgress(index, 100);
     }
 
     if (createdItems.length > 0) {
@@ -353,6 +376,8 @@ export default function AdminBulkMediaPage() {
     }
 
     if (failedRows.length === 0) {
+      setUploadProgress(100);
+      setProgressLabel(`Saved ${totalRows} of ${totalRows} items`);
       router.push("/admin/media-library?status=bulk-created");
       return;
     }
@@ -364,6 +389,8 @@ export default function AdminBulkMediaPage() {
         .map((entry) => entry.message)
         .join(" ")}`,
     );
+    setUploadProgress(100);
+    setProgressLabel(`Processed ${totalRows} of ${totalRows} items`);
     setIsSaving(false);
   }
 
@@ -603,6 +630,17 @@ export default function AdminBulkMediaPage() {
               Add Another Row
             </button>
           </div>
+
+          {isSaving ? (
+            <div className={`${styles.progressWrap} ${styles.formGridFull}`}>
+              <p className={styles.progressLabel}>
+                {progressLabel || "Saving bulk media..."} {uploadProgress}%
+              </p>
+              <div className={styles.progressTrack}>
+                <div className={styles.progressFill} style={{ width: `${uploadProgress}%` }} />
+              </div>
+            </div>
+          ) : null}
         </form>
       </section>
 

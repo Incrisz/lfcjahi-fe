@@ -18,6 +18,7 @@ import {
   deleteCategoryApi,
   deleteSubcategoryApi,
   fetchCategoriesApi,
+  hasApiBaseUrl,
   updateCategoryApi,
   updateSubcategoryApi,
 } from "../lib/admin-api";
@@ -85,6 +86,15 @@ function deleteSubcategoryInMedia(categoryName: string, subcategoryName: string)
       : item,
   );
   saveMediaItems(media);
+}
+
+function countCategoryContent(categoryName: string): number {
+  return loadMediaItems().filter((item) => item.category === categoryName).length;
+}
+
+function countSubcategoryContent(categoryName: string, subcategoryName: string): number {
+  return loadMediaItems().filter((item) => item.category === categoryName && item.subcategory === subcategoryName)
+    .length;
 }
 
 export default function AdminCategoriesPage() {
@@ -213,21 +223,34 @@ export default function AdminCategoriesPage() {
       return;
     }
 
-    const nextCategories = persistCategoryTree(
-      categories.filter((item) => item.id !== category.id),
-      setCategories,
-    );
-    deleteCategoryInMedia(category.name);
-
-    if (selectedCategoryId === category.id) {
-      setSelectedCategoryId(nextCategories[0]?.id || "");
+    const attachedContentCount = countCategoryContent(category.name);
+    if (attachedContentCount > 0) {
+      setStatus(
+        `Cannot delete '${category.name}' because it still has ${attachedContentCount} media item(s). Remove the content first.`,
+      );
+      return;
     }
 
+    const apiConfigured = hasApiBaseUrl();
+
     try {
-      await deleteCategoryApi(category.id);
-      setStatus("Category deleted successfully.");
-    } catch {
-      setStatus("Category deleted locally.");
+      if (apiConfigured) {
+        await deleteCategoryApi(category.id);
+      }
+
+      const nextCategories = persistCategoryTree(
+        categories.filter((item) => item.id !== category.id),
+        setCategories,
+      );
+      deleteCategoryInMedia(category.name);
+
+      if (selectedCategoryId === category.id) {
+        setSelectedCategoryId(nextCategories[0]?.id || "");
+      }
+
+      setStatus(apiConfigured ? "Category deleted successfully." : "Category deleted locally.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not delete category.");
     }
   }
 
@@ -356,22 +379,34 @@ export default function AdminCategoriesPage() {
       return;
     }
 
-    const nextCategories = categories.map((item) =>
-      item.id === selectedCategory.id
-        ? {
-            ...item,
-            subcategories: item.subcategories.filter((entry) => entry.id !== subcategory.id),
-          }
-        : item,
-    );
-    persistCategoryTree(nextCategories, setCategories);
-    deleteSubcategoryInMedia(selectedCategory.name, subcategory.name);
+    const attachedContentCount = countSubcategoryContent(selectedCategory.name, subcategory.name);
+    if (attachedContentCount > 0) {
+      setStatus(
+        `Cannot delete '${subcategory.name}' because it still has ${attachedContentCount} media item(s). Remove the content first.`,
+      );
+      return;
+    }
+
+    const apiConfigured = hasApiBaseUrl();
 
     try {
-      await deleteSubcategoryApi(subcategory.id);
-      setStatus("Subcategory deleted successfully.");
-    } catch {
-      setStatus("Subcategory deleted locally.");
+      if (apiConfigured) {
+        await deleteSubcategoryApi(subcategory.id);
+      }
+
+      const nextCategories = categories.map((item) =>
+        item.id === selectedCategory.id
+          ? {
+              ...item,
+              subcategories: item.subcategories.filter((entry) => entry.id !== subcategory.id),
+            }
+          : item,
+      );
+      persistCategoryTree(nextCategories, setCategories);
+      deleteSubcategoryInMedia(selectedCategory.name, subcategory.name);
+      setStatus(apiConfigured ? "Subcategory deleted successfully." : "Subcategory deleted locally.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not delete subcategory.");
     }
   }
 

@@ -55,6 +55,24 @@ async function parseEnvelope<T>(response: Response): Promise<T> {
   return payload.data;
 }
 
+async function ensureSuccess(response: Response): Promise<boolean> {
+  if (response.ok) {
+    return true;
+  }
+
+  const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+  const fallback = `API request failed with status ${response.status}`;
+  const message = payload?.message || fallback;
+  const errors = payload?.errors
+    ? Object.values(payload.errors)
+        .flat()
+        .filter(Boolean)
+        .join(" ")
+    : "";
+
+  throw new Error(errors && errors !== message ? `${message} ${errors}`.trim() : message);
+}
+
 export function hasApiBaseUrl(): boolean {
   return Boolean(getApiBaseUrl());
 }
@@ -106,7 +124,7 @@ export async function deleteCategoryApi(id: string): Promise<boolean> {
   }
 
   const response = await fetch(url, { method: "DELETE" });
-  return response.ok;
+  return ensureSuccess(response);
 }
 
 export async function createSubcategoryApi(categoryId: string, name: string): Promise<{ id: string; name: string } | null> {
@@ -146,7 +164,7 @@ export async function deleteSubcategoryApi(subcategoryId: string): Promise<boole
   }
 
   const response = await fetch(url, { method: "DELETE" });
-  return response.ok;
+  return ensureSuccess(response);
 }
 
 export async function fetchSpeakersApi(): Promise<SpeakerItem[] | null> {
