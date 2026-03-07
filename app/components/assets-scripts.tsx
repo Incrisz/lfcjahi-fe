@@ -6,19 +6,13 @@ type AssetsScriptsProps = {
   pageScript: "lfc-library.js" | "lfc-single-message.js";
 };
 
-/* ── CDN URLs for standard third-party libraries ── */
-const CDN_SCRIPTS = [
-  "https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.2/js/bootstrap.min.js",
-];
-
 /* ── Custom scripts inlined from public/assets/js at build time ── */
 function readScript(filename: string): string {
   const filePath = path.join(process.cwd(), "public", "assets", "js", filename);
   return fs.readFileSync(filePath, "utf-8");
 }
 
+const INLINE_VENDOR = ["jquery-3.6.0.min.js", "popper.min.js", "bootstrap.min.js"] as const;
 const INLINE_CORE = ["asyncloader.min.js", "streamlab-core.js", "script.js", "messages-data.js"] as const;
 
 export default function AssetsScripts({ pageScript }: AssetsScriptsProps) {
@@ -34,9 +28,14 @@ export default function AssetsScripts({ pageScript }: AssetsScriptsProps) {
         }}
       />
 
-      {/* Third-party libraries from CDN */}
-      {CDN_SCRIPTS.map((url) => (
-        <Script key={url} src={url} strategy="afterInteractive" />
+      {/* Inline vendor scripts in dependency order */}
+      {INLINE_VENDOR.map((name) => (
+        <Script
+          key={name}
+          id={`inline-${name.replace(/\./g, "-")}`}
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: readScript(name) }}
+        />
       ))}
 
       {/* Inline custom core scripts */}
