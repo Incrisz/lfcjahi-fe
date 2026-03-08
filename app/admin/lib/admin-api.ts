@@ -188,7 +188,28 @@ export async function fetchSpeakersApi(): Promise<SpeakerItem[] | null> {
   return parseEnvelope<SpeakerItem[]>(response);
 }
 
-export async function createSpeakerApi(name: string): Promise<SpeakerItem | null> {
+type SaveSpeakerInput = {
+  name: string;
+  imageFile?: File | null;
+  removeImage?: boolean;
+};
+
+function buildSpeakerFormData(input: SaveSpeakerInput): FormData {
+  const formData = new FormData();
+  formData.append("name", input.name.trim());
+
+  if (input.imageFile) {
+    formData.append("image_file", input.imageFile);
+  }
+
+  if (input.removeImage) {
+    formData.append("remove_image", "1");
+  }
+
+  return formData;
+}
+
+export async function createSpeakerApi(input: SaveSpeakerInput): Promise<SpeakerItem | null> {
   const url = buildApiUrl("/api/admin/speakers");
   if (!url) {
     return null;
@@ -196,23 +217,32 @@ export async function createSpeakerApi(name: string): Promise<SpeakerItem | null
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    headers: {
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    body: buildSpeakerFormData(input),
   });
 
   return parseEnvelope<SpeakerItem>(response);
 }
 
-export async function updateSpeakerApi(id: string, name: string): Promise<SpeakerItem | null> {
+export async function updateSpeakerApi(id: string, input: SaveSpeakerInput): Promise<SpeakerItem | null> {
   const url = buildApiUrl(`/api/admin/speakers/${id}`);
   if (!url) {
     return null;
   }
 
+  const formData = buildSpeakerFormData(input);
+  formData.append("_method", "PUT");
+
   const response = await fetch(url, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    body: formData,
   });
 
   return parseEnvelope<SpeakerItem>(response);

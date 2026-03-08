@@ -14,6 +14,7 @@ export type CategoryItem = {
 export type SpeakerItem = {
   id: string;
   name: string;
+  imageUrl: string;
 };
 
 export type MediaItem = {
@@ -25,10 +26,13 @@ export type MediaItem = {
   speaker: string;
   mediaDate: string;
   thumbnailUrl: string;
+  customThumbnailUrl?: string;
+  speakerImageUrl?: string;
   mediaUrl: string;
   mediaSourceType?: "link" | "file" | "";
   isPublished: boolean;
   createdAt: string;
+  updatedAt?: string;
 };
 
 export type EventItem = {
@@ -224,6 +228,7 @@ function normalizeSpeakers(items: SpeakerItem[]): SpeakerItem[] {
     .map((entry, index) => ({
       id: entry.id || `local-speaker-${index}`,
       name: entry.name.trim(),
+      imageUrl: (entry.imageUrl || "").trim(),
     }))
     .filter((entry) => entry.name.length > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -324,6 +329,7 @@ export function loadSpeakers(): SpeakerItem[] {
     .map((name, index) => ({
       id: `derived-speaker-${index}`,
       name,
+      imageUrl: "",
     }));
 
   return normalizeSpeakers(mediaSpeakers);
@@ -341,17 +347,40 @@ export function getSpeakerNames(items: SpeakerItem[]): string[] {
   return normalizeSpeakers(items).map((entry) => entry.name);
 }
 
+export function getSpeakerImageUrl(items: SpeakerItem[], speakerName: string): string {
+  const normalizedName = speakerName.trim();
+  if (!normalizedName) {
+    return "";
+  }
+
+  const match = normalizeSpeakers(items).find((entry) => entry.name === normalizedName);
+  return match?.imageUrl || "";
+}
+
 export function loadMediaItems(): MediaItem[] {
   if (!canUseStorage()) {
     return [];
   }
 
   const items = parseJson<MediaItem[]>(window.localStorage.getItem(MEDIA_KEY), []);
+  const speakerImageMap = new Map(loadSpeakers().map((speaker) => [speaker.name, speaker.imageUrl || ""]));
 
   return items
     .filter((item) => item && item.id && item.title)
     .map((item) => ({
       ...item,
+      speaker: (item.speaker || "").trim(),
+      customThumbnailUrl:
+        typeof item.customThumbnailUrl === "string" ? item.customThumbnailUrl : (item.thumbnailUrl || "").trim(),
+      speakerImageUrl:
+        typeof item.speakerImageUrl === "string" && item.speakerImageUrl.trim()
+          ? item.speakerImageUrl.trim()
+          : speakerImageMap.get((item.speaker || "").trim()) || "",
+      thumbnailUrl:
+        (typeof item.customThumbnailUrl === "string" ? item.customThumbnailUrl : (item.thumbnailUrl || "").trim()) ||
+        (typeof item.speakerImageUrl === "string" && item.speakerImageUrl.trim()
+          ? item.speakerImageUrl.trim()
+          : speakerImageMap.get((item.speaker || "").trim()) || ""),
       isPublished: item.isPublished !== false,
     }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

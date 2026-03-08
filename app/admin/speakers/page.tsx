@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import styles from "../admin-pages.module.css";
 import AdminShell from "../components/admin-shell";
 import {
@@ -19,6 +19,15 @@ import {
   updateSpeakerApi,
 } from "../lib/admin-api";
 
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 function sortSpeakers(items: SpeakerItem[]): SpeakerItem[] {
   return [...items].sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -30,12 +39,14 @@ function persistSpeakers(items: SpeakerItem[], setItems: (items: SpeakerItem[]) 
   return sorted;
 }
 
-function renameSpeakerInMedia(oldName: string, newName: string): void {
+function renameSpeakerInMedia(oldName: string, replacement: SpeakerItem): void {
   const nextMedia = loadMediaItems().map((item) =>
     item.speaker === oldName
       ? {
           ...item,
-          speaker: newName,
+          speaker: replacement.name,
+          speakerImageUrl: replacement.imageUrl,
+          thumbnailUrl: item.customThumbnailUrl || replacement.imageUrl,
         }
       : item,
   );
@@ -49,6 +60,22 @@ function deleteSpeakerInMedia(name: string): void {
       ? {
           ...item,
           speaker: "",
+          speakerImageUrl: "",
+          thumbnailUrl: item.customThumbnailUrl || "",
+        }
+      : item,
+  );
+
+  saveMediaItems(nextMedia);
+}
+
+function syncSpeakerImageInMedia(name: string, imageUrl: string): void {
+  const nextMedia = loadMediaItems().map((item) =>
+    item.speaker === name
+      ? {
+          ...item,
+          speakerImageUrl: imageUrl,
+          thumbnailUrl: item.customThumbnailUrl || imageUrl,
         }
       : item,
   );
@@ -62,8 +89,14 @@ function countSpeakerContent(name: string): number {
 
 export default function AdminSpeakersPage() {
   const [speakers, setSpeakers] = useState<SpeakerItem[]>(() => sortSpeakers(loadSpeakers()));
-  const [newSpeakerName, setNewSpeakerName] = useState("");
+  const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null);
+  const [speakerName, setSpeakerName] = useState("");
+  const [existingImageUrl, setExistingImageUrl] = useState("");
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
   const [status, setStatus] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -88,72 +121,145 @@ export default function AdminSpeakersPage() {
     };
   }, []);
 
-  async function handleAddSpeaker() {
-    const name = newSpeakerName.trim();
+  const activeImageUrl = imagePreviewUrl || (removeImage ? "" : existingImageUrl);
+  const editingSpeaker = editingSpeakerId ? speakers.find((item) => item.id === editingSpeakerId) || null : null;
+
+  function resetForm() {
+    setEditingSpeakerId(null);
+    setSpeakerName("");
+    setExistingImageUrl("");
+    setImagePreviewUrl("");
+    setImageFile(null);
+    setRemoveImage(false);
+  }
+
+  async function handleImageSelection(file: File | null) {
+    setImageFile(file);
+    setRemoveImage(false);
+
+    if (!file) {
+      setImagePreviewUrl("");
+      return;
+    }
+
+    try {
+      const preview = await fileToDataUrl(file);
+      setImagePreviewUrl(preview);
+    } catch {
+      setImagePreviewUrl("");
+      setStatus("Could not preview the selected image.");
+    }
+  }
+
+  function handleEditSpeaker(speaker: SpeakerItem) {
+    setEditingSpeakerId(speaker.id);
+    setSpeakerName(speaker.name);
+    setExistingImageUrl(speaker.imageUrl || "");
+    setImagePreviewUrl("");
+    setImageFile(null);
+    setRemoveImage(false);
+    setStatus("");
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSaving) {
+      return;
+    }
+
+    const name = speakerName.trim();
     if (!name) {
       setStatus("Speaker name is required.");
       return;
     }
 
-    const duplicateExists = speakers.some((item) => item.name.toLowerCase() === name.toLowerCase());
-    if (duplicateExists) {
-      setStatus("Speaker already exists.");
-      return;
-    }
-
-    const fallbackSpeaker: SpeakerItem = {
-      id: createId("speaker"),
-      name,
-    };
-
-    try {
-      const remoteSpeaker = await createSpeakerApi(name);
-      persistSpeakers([...speakers, remoteSpeaker || fallbackSpeaker], setSpeakers);
-      setStatus("Speaker added successfully.");
-    } catch {
-      persistSpeakers([...speakers, fallbackSpeaker], setSpeakers);
-      setStatus("Speaker added locally.");
-    }
-
-    setNewSpeakerName("");
-  }
-
-  async function handleEditSpeaker(speaker: SpeakerItem) {
-    const nextName = window.prompt("Edit speaker name", speaker.name)?.trim();
-    if (!nextName) {
-      return;
-    }
-
-    if (nextName === speaker.name) {
-      setStatus("No changes made.");
-      return;
-    }
-
     const duplicateExists = speakers.some(
-      (item) => item.id !== speaker.id && item.name.toLowerCase() === nextName.toLowerCase(),
+      (item) => item.id !== editingSpeakerId && item.name.toLowerCase() === name.toLowerCase(),
     );
     if (duplicateExists) {
       setStatus("Another speaker already uses that name.");
       return;
     }
 
-    try {
-      const remoteSpeaker = await updateSpeakerApi(speaker.id, nextName);
-      const replacement = remoteSpeaker || { ...speaker, name: nextName };
-      persistSpeakers(
-        speakers.map((item) => (item.id === speaker.id ? replacement : item)),
-        setSpeakers,
-      );
-      renameSpeakerInMedia(speaker.name, replacement.name);
-      setStatus("Speaker updated successfully.");
-    } catch {
-      persistSpeakers(
-        speakers.map((item) => (item.id === speaker.id ? { ...item, name: nextName } : item)),
-        setSpeakers,
-      );
-      renameSpeakerInMedia(speaker.name, nextName);
-      setStatus("Speaker updated locally.");
+    setIsSaving(true);
+
+    let localImageUrl = removeImage ? "" : existingImageUrl;
+    if (imageFile && !hasApiBaseUrl()) {
+      try {
+        localImageUrl = await fileToDataUrl(imageFile);
+      } catch {
+        setStatus("Could not read the selected image.");
+        setIsSaving(false);
+        return;
+      }
+    } else if (imageFile) {
+      localImageUrl = existingImageUrl;
     }
+
+    const fallbackSpeaker: SpeakerItem = {
+      id: editingSpeakerId || createId("speaker"),
+      name,
+      imageUrl: localImageUrl,
+    };
+
+    try {
+      const remoteSpeaker = editingSpeakerId
+        ? await updateSpeakerApi(editingSpeakerId, {
+            name,
+            imageFile,
+            removeImage,
+          })
+        : await createSpeakerApi({
+            name,
+            imageFile,
+          });
+      const replacement = remoteSpeaker || fallbackSpeaker;
+
+      if (editingSpeaker) {
+        persistSpeakers(
+          speakers.map((item) => (item.id === editingSpeaker.id ? replacement : item)),
+          setSpeakers,
+        );
+
+        if (editingSpeaker.name !== replacement.name) {
+          renameSpeakerInMedia(editingSpeaker.name, replacement);
+        } else {
+          syncSpeakerImageInMedia(replacement.name, replacement.imageUrl);
+        }
+      } else {
+        persistSpeakers([...speakers, replacement], setSpeakers);
+      }
+
+      setStatus(editingSpeakerId ? "Speaker updated successfully." : "Speaker added successfully.");
+      resetForm();
+    } catch (error) {
+      if (hasApiBaseUrl()) {
+        setStatus(error instanceof Error ? error.message : "Could not save speaker.");
+        setIsSaving(false);
+        return;
+      }
+
+      if (editingSpeaker) {
+        const replacement = fallbackSpeaker;
+        persistSpeakers(
+          speakers.map((item) => (item.id === editingSpeaker.id ? replacement : item)),
+          setSpeakers,
+        );
+
+        if (editingSpeaker.name !== replacement.name) {
+          renameSpeakerInMedia(editingSpeaker.name, replacement);
+        } else {
+          syncSpeakerImageInMedia(replacement.name, replacement.imageUrl);
+        }
+      } else {
+        persistSpeakers([...speakers, fallbackSpeaker], setSpeakers);
+      }
+
+      setStatus(editingSpeakerId ? "Speaker updated locally." : "Speaker added locally.");
+      resetForm();
+    }
+
+    setIsSaving(false);
   }
 
   async function handleDeleteSpeaker(speaker: SpeakerItem) {
@@ -182,6 +288,9 @@ export default function AdminSpeakersPage() {
         setSpeakers,
       );
       deleteSpeakerInMedia(speaker.name);
+      if (editingSpeakerId === speaker.id) {
+        resetForm();
+      }
       setStatus(apiConfigured ? "Speaker deleted successfully." : "Speaker deleted locally.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not delete speaker.");
@@ -198,19 +307,92 @@ export default function AdminSpeakersPage() {
       </section>
 
       <section className={styles.panel}>
-        <h2 className={styles.panelTitle}>Add Speaker</h2>
-        <p className={styles.panelText}>Create a controlled speaker list so names stay consistent across media items.</p>
-        <div className={styles.inlineActions}>
-          <input
-            className={styles.inlineInput}
-            value={newSpeakerName}
-            onChange={(event) => setNewSpeakerName(event.target.value)}
-            placeholder="Speaker name"
-          />
-          <button type="button" className={styles.buttonPrimary} onClick={() => void handleAddSpeaker()}>
-            Add Speaker
-          </button>
-        </div>
+        <h2 className={styles.panelTitle}>{editingSpeakerId ? "Edit Speaker" : "Add Speaker"}</h2>
+        <p className={styles.panelText}>
+          Add a speaker photo here. Media items without their own thumbnail will automatically use that speaker image.
+        </p>
+
+        <form className={styles.formGrid} onSubmit={(event) => void handleSubmit(event)}>
+          <div className={styles.field}>
+            <label htmlFor="speakerName">Speaker Name</label>
+            <input
+              id="speakerName"
+              value={speakerName}
+              onChange={(event) => setSpeakerName(event.target.value)}
+              placeholder="Pastor or speaker name"
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor="speakerImage">Speaker Photo</label>
+            <div className={styles.uploadCard}>
+              <div className={styles.uploadHeader}>
+                <p className={styles.uploadTitle}>Upload speaker image</p>
+                <p className={styles.uploadSubtext}>JPG, PNG, or WebP. Maximum file size: 5MB.</p>
+              </div>
+
+              <input
+                id="speakerImage"
+                className={styles.hiddenFileInput}
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  void handleImageSelection(file);
+                }}
+              />
+
+              <div className={styles.inlineActions}>
+                <label htmlFor="speakerImage" className={styles.fileTrigger}>
+                  Choose Image
+                </label>
+                {(existingImageUrl || imageFile) ? (
+                  <button
+                    type="button"
+                    className={styles.buttonSecondary}
+                    onClick={() => {
+                      setImageFile(null);
+                      setImagePreviewUrl("");
+                      setExistingImageUrl("");
+                      setRemoveImage(true);
+                    }}
+                  >
+                    Clear Image
+                  </button>
+                ) : null}
+              </div>
+
+              {imageFile ? <p className={styles.fileName}>{imageFile.name}</p> : null}
+
+              {activeImageUrl ? (
+                <div className={styles.uploadPreviewWrap}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={activeImageUrl} alt="Speaker preview" className={styles.uploadPreview} />
+                </div>
+              ) : (
+                <p className={styles.uploadSubtext}>No speaker photo selected yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className={`${styles.inlineActions} ${styles.formGridFull}`}>
+            <button className={styles.buttonPrimary} type="submit" disabled={isSaving}>
+              {isSaving ? "Saving..." : editingSpeakerId ? "Update Speaker" : "Add Speaker"}
+            </button>
+            {editingSpeakerId ? (
+              <button
+                type="button"
+                className={styles.buttonSecondary}
+                onClick={() => {
+                  resetForm();
+                  setStatus("Edit cancelled.");
+                }}
+              >
+                Cancel Edit
+              </button>
+            ) : null}
+          </div>
+        </form>
       </section>
 
       <section className={styles.panel}>
@@ -222,6 +404,7 @@ export default function AdminSpeakersPage() {
             <table className={styles.table}>
               <thead>
                 <tr>
+                  <th>Photo</th>
                   <th>Speaker</th>
                   <th>Actions</th>
                 </tr>
@@ -229,13 +412,23 @@ export default function AdminSpeakersPage() {
               <tbody>
                 {speakers.map((speaker) => (
                   <tr key={speaker.id}>
+                    <td>
+                      {speaker.imageUrl ? (
+                        <div className={styles.uploadPreviewWrap} style={{ maxWidth: 80 }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={speaker.imageUrl} alt={speaker.name} className={styles.uploadPreview} />
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td>{speaker.name}</td>
                     <td>
                       <div className={styles.listActions}>
                         <button
                           type="button"
                           className={styles.buttonSecondary}
-                          onClick={() => void handleEditSpeaker(speaker)}
+                          onClick={() => handleEditSpeaker(speaker)}
                         >
                           Edit
                         </button>

@@ -9,6 +9,7 @@ import {
   MediaItem,
   createId,
   getCategoryNames,
+  getSpeakerImageUrl,
   getSpeakerNames,
   getSubcategoryNames,
   loadCategoryTree,
@@ -163,8 +164,8 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       setDescription(asString(item.description));
       setSpeaker(asString(item.speaker));
       setMediaDate(asString(item.mediaDate));
-      setExistingThumbnailUrl(asString(item.thumbnailUrl));
-      setThumbnailPreviewUrl(asString(item.thumbnailUrl));
+      setExistingThumbnailUrl(asString(item.customThumbnailUrl ?? item.thumbnailUrl));
+      setThumbnailPreviewUrl("");
       setThumbnailFile(null);
       setExistingMediaUrl(asString(item.mediaUrl));
 
@@ -215,11 +216,14 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
     return names;
   }, [speaker, speakers]);
 
+  const speakerImageUrl = useMemo(() => getSpeakerImageUrl(speakers, speaker), [speaker, speakers]);
+  const resolvedThumbnailPreviewUrl = thumbnailPreviewUrl || existingThumbnailUrl || speakerImageUrl;
+
   async function handleThumbnailFileSelection(file: File | null) {
     setThumbnailFile(file);
 
     if (!file) {
-      setThumbnailPreviewUrl(existingThumbnailUrl);
+      setThumbnailPreviewUrl("");
       return;
     }
 
@@ -312,13 +316,18 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       }
     }
 
+    const resolvedSpeakerImageUrl = speakerImageUrl.trim();
+    const resolvedThumbnail = fallbackThumbnail || resolvedSpeakerImageUrl;
+
     const localFallbackItem: MediaItem = {
       id: mediaId || createId("media"),
       title: title.trim(),
       description: description.trim(),
       speaker: speaker.trim(),
       mediaDate,
-      thumbnailUrl: fallbackThumbnail,
+      thumbnailUrl: resolvedThumbnail,
+      customThumbnailUrl: fallbackThumbnail,
+      speakerImageUrl: resolvedSpeakerImageUrl,
       mediaUrl: resolvedMediaUrl,
       mediaSourceType: resolvedMediaSourceType,
       category,
@@ -508,7 +517,9 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <div className={styles.uploadCard}>
               <div className={styles.uploadHeader}>
                 <p className={styles.uploadTitle}>Upload thumbnail image</p>
-                <p className={styles.uploadSubtext}>JPG, PNG, or WebP. Maximum file size: 5MB.</p>
+                <p className={styles.uploadSubtext}>
+                  JPG, PNG, or WebP. Maximum file size: 5MB. Leave blank to use the selected speaker photo.
+                </p>
               </div>
 
               <input
@@ -528,9 +539,9 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
 
               {thumbnailFile ? <p className={styles.fileName}>{thumbnailFile.name}</p> : null}
 
-              {thumbnailPreviewUrl ? (
+              {resolvedThumbnailPreviewUrl ? (
                 <div className={styles.uploadPreviewWrap}>
-                  <img src={thumbnailPreviewUrl} alt="Thumbnail preview" className={styles.uploadPreview} />
+                  <img src={resolvedThumbnailPreviewUrl} alt="Thumbnail preview" className={styles.uploadPreview} />
                 </div>
               ) : (
                 <p className={styles.uploadSubtext}>No thumbnail selected yet.</p>
@@ -576,7 +587,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
                 <div key="audio-file-mode" className={styles.uploadCard}>
                   <div className={styles.uploadHeader}>
                     <p className={styles.uploadTitle}>Upload audio file</p>
-                    <p className={styles.uploadSubtext}>MP3, WAV, M4A, AAC, OGG. Maximum file size: 50MB.</p>
+                    <p className={styles.uploadSubtext}>MP3, WAV, M4A, AAC, OGG. Maximum file size: 200MB.</p>
                   </div>
 
                   <input
