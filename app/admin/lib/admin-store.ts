@@ -29,6 +29,7 @@ export type MediaItem = {
   customThumbnailUrl?: string;
   speakerImageUrl?: string;
   mediaUrl: string;
+  downloadCount: number;
   mediaSourceType?: "link" | "file" | "";
   isPublished: boolean;
   createdAt: string;
@@ -381,6 +382,7 @@ export function loadMediaItems(): MediaItem[] {
         (typeof item.speakerImageUrl === "string" && item.speakerImageUrl.trim()
           ? item.speakerImageUrl.trim()
           : speakerImageMap.get((item.speaker || "").trim()) || ""),
+      downloadCount: Number.isFinite(Number(item.downloadCount)) ? Number(item.downloadCount) : 0,
       isPublished: item.isPublished !== false,
     }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

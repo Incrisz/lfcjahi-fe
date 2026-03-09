@@ -299,6 +299,7 @@ export default function AdminMediaLibraryPage() {
                   <th>Category</th>
                   <th>Sub-Category</th>
                   <th>Speaker</th>
+                  <th>Downloads</th>
                   <th>Play</th>
                   <th>Publish</th>
                   <th>Actions</th>
@@ -322,6 +323,7 @@ export default function AdminMediaLibraryPage() {
                     <td>{item.category}</td>
                     <td>{item.subcategory || "-"}</td>
                     <td>{item.speaker || "-"}</td>
+                    <td>{item.downloadCount}</td>
                     <td>
                       {item.mediaUrl ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>

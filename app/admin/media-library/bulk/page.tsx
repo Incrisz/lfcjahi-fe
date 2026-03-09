@@ -326,6 +326,7 @@ export default function AdminBulkMediaPage() {
         customThumbnailUrl: resolvedThumbnailUrl,
         speakerImageUrl: getSpeakerImageUrl(speakers, speaker),
         mediaUrl: resolvedMediaUrl,
+        downloadCount: 0,
         mediaSourceType: resolvedMediaSourceType,
         isPublished,
         createdAt: new Date().toISOString(),

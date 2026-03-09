@@ -329,6 +329,9 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       customThumbnailUrl: fallbackThumbnail,
       speakerImageUrl: resolvedSpeakerImageUrl,
       mediaUrl: resolvedMediaUrl,
+      downloadCount: mediaId
+        ? mediaItems.find((entry) => entry.id === mediaId)?.downloadCount ?? 0
+        : 0,
       mediaSourceType: resolvedMediaSourceType,
       category,
       subcategory,
