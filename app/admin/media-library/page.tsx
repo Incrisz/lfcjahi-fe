@@ -296,8 +296,6 @@ export default function AdminMediaLibraryPage() {
                 <tr>
                   <th>Title</th>
                   <th>Post Image</th>
-                  <th>Category</th>
-                  <th>Sub-Category</th>
                   <th>Speaker</th>
                   <th>Downloads</th>
                   <th>Play</th>
@@ -320,8 +318,6 @@ export default function AdminMediaLibraryPage() {
                         "-"
                       )}
                     </td>
-                    <td>{item.category}</td>
-                    <td>{item.subcategory || "-"}</td>
                     <td>{item.speaker || "-"}</td>
                     <td>{item.downloadCount}</td>
                     <td>

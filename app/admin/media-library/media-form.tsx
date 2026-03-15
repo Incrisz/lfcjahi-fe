@@ -11,13 +11,13 @@ import {
   getCategoryNames,
   getSpeakerImageUrl,
   getSpeakerNames,
-  getSubcategoryNames,
   loadCategoryTree,
   loadMediaItems,
   loadSpeakers,
   saveCategoryTree,
   saveMediaItems,
   saveSpeakers,
+  SERVICE_OPTIONS,
 } from "../lib/admin-store";
 import {
   fetchCategoriesApi,
@@ -46,6 +46,11 @@ function isAudioCategory(category: string): boolean {
   return category.trim().toLowerCase() === "audio";
 }
 
+function pickDefaultCategory(categoryOptions: string[]): string {
+  const audioCategory = categoryOptions.find((entry) => entry.trim().toLowerCase() === "audio");
+  return audioCategory || categoryOptions[0] || "Audio";
+}
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
@@ -55,7 +60,6 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
   const isEditing = Boolean(mediaId);
 
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-  const [categoryTree, setCategoryTree] = useState(loadCategoryTree);
   const [speakers, setSpeakers] = useState(loadSpeakers);
   const [isReady, setIsReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -129,17 +133,16 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
         return;
       }
 
-      setCategoryTree(nextCategoryTree);
       setMediaItems(nextMediaItems);
       setSpeakers(nextSpeakers);
 
       const categoryOptions = getCategoryNames(nextCategoryTree);
-      const fallbackCategory = categoryOptions[0] || "";
+      const fallbackCategory = pickDefaultCategory(categoryOptions);
+      const fallbackService = SERVICE_OPTIONS[0] || "";
 
       if (!mediaId) {
-        const fallbackSubcategory = getSubcategoryNames(nextCategoryTree, fallbackCategory)[0] || "";
         setCategory(fallbackCategory);
-        setSubcategory(fallbackSubcategory);
+        setSubcategory(fallbackService);
         setIsReady(true);
         return;
       }
@@ -154,11 +157,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       }
 
       const itemCategory = categoryOptions.includes(item.category) ? item.category : fallbackCategory;
-      const subcategoryOptions = getSubcategoryNames(nextCategoryTree, itemCategory);
-      const itemSubcategory =
-        subcategoryOptions.includes(item.subcategory) || item.subcategory.trim() === ""
-          ? item.subcategory
-          : subcategoryOptions[0] || "";
+      const itemSubcategory = item.subcategory.trim() || fallbackService;
 
       setTitle(asString(item.title));
       setDescription(asString(item.description));
@@ -192,21 +191,12 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
     };
   }, [mediaId]);
 
-  const categoryOptions = useMemo(() => {
-    const names = getCategoryNames(categoryTree);
-    if (category && !names.includes(category)) {
-      return [...names, category];
+  const serviceOptions = useMemo(() => {
+    if (subcategory && !SERVICE_OPTIONS.includes(subcategory)) {
+      return [...SERVICE_OPTIONS, subcategory];
     }
-    return names;
-  }, [category, categoryTree]);
-
-  const subcategoryOptions = useMemo(() => {
-    const names = getSubcategoryNames(categoryTree, category);
-    if (subcategory && !names.includes(subcategory)) {
-      return [...names, subcategory];
-    }
-    return names;
-  }, [category, categoryTree, subcategory]);
+    return SERVICE_OPTIONS;
+  }, [subcategory]);
 
   const speakerOptions = useMemo(() => {
     const names = getSpeakerNames(speakers);
@@ -232,18 +222,6 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       setThumbnailPreviewUrl(preview);
     } catch {
       setThumbnailPreviewUrl(existingThumbnailUrl);
-    }
-  }
-
-  function handleCategoryChange(nextCategory: string) {
-    setCategory(nextCategory);
-    const subcategories = getSubcategoryNames(categoryTree, nextCategory);
-    setSubcategory(subcategories[0] || "");
-
-    if (!isAudioCategory(nextCategory)) {
-      setAudioSourceMode("link");
-      setAudioLink("");
-      setAudioFile(null);
     }
   }
 
@@ -420,7 +398,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
         <p className={styles.panelText}>
           {isEditing
             ? "Update existing media details, thumbnail, and audio source settings."
-            : "Create a new media item and assign category and subcategory."}
+            : "Create a new media item and assign the service."}
         </p>
       </section>
 
@@ -454,30 +432,11 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
           </div>
 
           <div className={styles.field}>
-            <label htmlFor="mediaCategory">Category</label>
-            <select
-              id="mediaCategory"
-              value={category || ""}
-              onChange={(event) => handleCategoryChange(event.target.value)}
-            >
-              {categoryOptions.map((categoryOption) => (
-                <option key={categoryOption} value={categoryOption}>
-                  {categoryOption}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="mediaSubcategory">Subcategory</label>
-            <select
-              id="mediaSubcategory"
-              value={subcategory || ""}
-              onChange={(event) => setSubcategory(event.target.value)}
-            >
-              {subcategoryOptions.map((subOption) => (
-                <option key={subOption} value={subOption}>
-                  {subOption}
+            <label htmlFor="mediaService">Service</label>
+            <select id="mediaService" value={subcategory || ""} onChange={(event) => setSubcategory(event.target.value)}>
+              {serviceOptions.map((serviceOption) => (
+                <option key={serviceOption} value={serviceOption}>
+                  {serviceOption}
                 </option>
               ))}
             </select>

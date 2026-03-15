@@ -13,13 +13,13 @@ import {
   getCategoryNames,
   getSpeakerImageUrl,
   getSpeakerNames,
-  getSubcategoryNames,
   loadCategoryTree,
   loadMediaItems,
   loadSpeakers,
   saveCategoryTree,
   saveMediaItems,
   saveSpeakers,
+  SERVICE_OPTIONS,
 } from "../../lib/admin-store";
 import {
   fetchCategoriesApi,
@@ -63,6 +63,11 @@ function isAudioCategory(category: string): boolean {
   return category.trim().toLowerCase() === "audio";
 }
 
+function pickDefaultCategory(categoryOptions: string[]): string {
+  const audioCategory = categoryOptions.find((entry) => entry.trim().toLowerCase() === "audio");
+  return audioCategory || categoryOptions[0] || "Audio";
+}
+
 async function fileToDataUrl(file: File): Promise<string> {
   return await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -76,7 +81,6 @@ export default function AdminBulkMediaPage() {
   const router = useRouter();
 
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-  const [categoryTree, setCategoryTree] = useState(loadCategoryTree);
   const [speakers, setSpeakers] = useState<SpeakerItem[]>(loadSpeakers);
   const [category, setCategory] = useState<MediaCategory>("");
   const [subcategory, setSubcategory] = useState("");
@@ -130,14 +134,13 @@ export default function AdminBulkMediaPage() {
       }
 
       const categoryNames = getCategoryNames(nextCategoryTree);
-      const fallbackCategory = categoryNames[0] || "";
-      const fallbackSubcategory = getSubcategoryNames(nextCategoryTree, fallbackCategory)[0] || "";
+      const fallbackCategory = pickDefaultCategory(categoryNames);
+      const fallbackService = SERVICE_OPTIONS[0] || "";
 
       setMediaItems(nextMediaItems);
-      setCategoryTree(nextCategoryTree);
       setSpeakers(nextSpeakers);
       setCategory(fallbackCategory);
-      setSubcategory(fallbackSubcategory);
+      setSubcategory(fallbackService);
       setIsReady(true);
     }
 
@@ -149,11 +152,12 @@ export default function AdminBulkMediaPage() {
   }, []);
 
   const speakerOptions = useMemo(() => getSpeakerNames(speakers), [speakers]);
-  const categoryOptions = useMemo(() => getCategoryNames(categoryTree), [categoryTree]);
-  const subcategoryOptions = useMemo(
-    () => getSubcategoryNames(categoryTree, category),
-    [category, categoryTree],
-  );
+  const serviceOptions = useMemo(() => {
+    if (subcategory && !SERVICE_OPTIONS.includes(subcategory)) {
+      return [...SERVICE_OPTIONS, subcategory];
+    }
+    return SERVICE_OPTIONS;
+  }, [subcategory]);
 
   async function handleThumbnailSelection(rowId: string, file: File | null) {
     if (!file) {
@@ -203,12 +207,6 @@ export default function AdminBulkMediaPage() {
 
       return current.filter((row) => row.id !== rowId);
     });
-  }
-
-  function handleCategoryChange(nextCategory: string) {
-    setCategory(nextCategory);
-    const nextSubcategories = getSubcategoryNames(categoryTree, nextCategory);
-    setSubcategory(nextSubcategories[0] || "");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -413,7 +411,7 @@ export default function AdminBulkMediaPage() {
       <section className={styles.panel}>
         <h2 className={styles.panelTitle}>Bulk Media Entry</h2>
         <p className={styles.panelText}>
-          Create multiple media items with shared category, subcategory, and publish settings while keeping speaker and thumbnail per row.
+          Create multiple media items with shared service and publish settings while keeping speaker and thumbnail per row.
         </p>
         <div className={styles.inlineActions}>
           <Link className={styles.buttonSecondary} href="/admin/speakers">
@@ -428,23 +426,11 @@ export default function AdminBulkMediaPage() {
       <section className={styles.panel}>
         <form className={styles.formGrid} onSubmit={handleSubmit}>
           <div className={styles.field}>
-            <label htmlFor="bulkCategory">Category</label>
-            <select id="bulkCategory" value={category} onChange={(event) => handleCategoryChange(event.target.value)}>
-              {categoryOptions.map((categoryOption) => (
-                <option key={categoryOption} value={categoryOption}>
-                  {categoryOption}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="bulkSubcategory">Subcategory</label>
-            <select id="bulkSubcategory" value={subcategory} onChange={(event) => setSubcategory(event.target.value)}>
-              <option value="">No subcategory</option>
-              {subcategoryOptions.map((subOption) => (
-                <option key={subOption} value={subOption}>
-                  {subOption}
+            <label htmlFor="bulkService">Service</label>
+            <select id="bulkService" value={subcategory} onChange={(event) => setSubcategory(event.target.value)}>
+              {serviceOptions.map((serviceOption) => (
+                <option key={serviceOption} value={serviceOption}>
+                  {serviceOption}
                 </option>
               ))}
             </select>

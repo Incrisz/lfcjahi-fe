@@ -133,6 +133,16 @@ export const DEFAULT_CATEGORY_TREE: CategoryItem[] = [
   },
 ];
 
+export const SERVICE_OPTIONS = [
+  "Sunday First Service",
+  "Sunday Second Service",
+  "Sunday Third Service",
+  "Week of Spiritual Emphasis",
+  "Midweek Service",
+  "Special Program",
+  "Other",
+];
+
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
   churchName: "LFC Jahi",
   logoUrl: "",
