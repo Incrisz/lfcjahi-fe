@@ -380,7 +380,11 @@ export function loadMediaItems(): MediaItem[] {
 
   return items
     .filter((item) => item && item.id && item.title)
-    .map((item) => ({
+    .map((item) => {
+      const mediaUrl = (item.mediaUrl || "").trim();
+      const hasMedia = Boolean(mediaUrl);
+
+      return {
       ...item,
       speaker: (item.speaker || "").trim(),
       customThumbnailUrl:
@@ -395,8 +399,10 @@ export function loadMediaItems(): MediaItem[] {
           ? item.speakerImageUrl.trim()
           : speakerImageMap.get((item.speaker || "").trim()) || ""),
       downloadCount: Number.isFinite(Number(item.downloadCount)) ? Number(item.downloadCount) : 0,
-      isPublished: item.isPublished !== false,
-    }))
+      isPublished: hasMedia && item.isPublished !== false,
+      mediaUrl,
+    };
+    })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
