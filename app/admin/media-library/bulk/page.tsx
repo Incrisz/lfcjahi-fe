@@ -34,6 +34,7 @@ type AudioSourceMode = "link" | "file";
 type BulkMediaRow = {
   id: string;
   speaker: string;
+  service: string;
   title: string;
   description: string;
   mediaDate: string;
@@ -48,6 +49,7 @@ function createEmptyRow(): BulkMediaRow {
   return {
     id: createId("bulk-media"),
     speaker: "",
+    service: "",
     title: "",
     description: "",
     mediaDate: "",
@@ -83,7 +85,6 @@ export default function AdminBulkMediaPage() {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [speakers, setSpeakers] = useState<SpeakerItem[]>(loadSpeakers);
   const [category, setCategory] = useState<MediaCategory>("");
-  const [subcategory, setSubcategory] = useState("");
   const [isPublished, setIsPublished] = useState(true);
   const [rows, setRows] = useState<BulkMediaRow[]>([createEmptyRow(), createEmptyRow(), createEmptyRow()]);
   const [isReady, setIsReady] = useState(false);
@@ -135,12 +136,10 @@ export default function AdminBulkMediaPage() {
 
       const categoryNames = getCategoryNames(nextCategoryTree);
       const fallbackCategory = pickDefaultCategory(categoryNames);
-      const fallbackService = SERVICE_OPTIONS[0] || "";
 
       setMediaItems(nextMediaItems);
       setSpeakers(nextSpeakers);
       setCategory(fallbackCategory);
-      setSubcategory(fallbackService);
       setIsReady(true);
     }
 
@@ -152,12 +151,7 @@ export default function AdminBulkMediaPage() {
   }, []);
 
   const speakerOptions = useMemo(() => getSpeakerNames(speakers), [speakers]);
-  const serviceOptions = useMemo(() => {
-    if (subcategory && !SERVICE_OPTIONS.includes(subcategory)) {
-      return [...SERVICE_OPTIONS, subcategory];
-    }
-    return SERVICE_OPTIONS;
-  }, [subcategory]);
+  const serviceOptions = useMemo(() => SERVICE_OPTIONS, []);
 
   async function handleThumbnailSelection(rowId: string, file: File | null) {
     if (!file) {
@@ -261,6 +255,13 @@ export default function AdminBulkMediaPage() {
         continue;
       }
 
+      const service = row.service.trim();
+      if (!service) {
+        failedRows.push({ rowId: row.id, message: `Row ${index + 1}: service is required.` });
+        updateBatchProgress(index, 100);
+        continue;
+      }
+
       const title = row.title.trim();
       if (!title) {
         failedRows.push({ rowId: row.id, message: `Row ${index + 1}: title is required.` });
@@ -317,7 +318,7 @@ export default function AdminBulkMediaPage() {
         title,
         description: row.description.trim(),
         category,
-        subcategory,
+        subcategory: service,
         speaker,
         mediaDate: row.mediaDate.trim(),
         thumbnailUrl: resolvedThumbnailUrl || getSpeakerImageUrl(speakers, speaker),
@@ -411,7 +412,7 @@ export default function AdminBulkMediaPage() {
       <section className={styles.panel}>
         <h2 className={styles.panelTitle}>Bulk Media Entry</h2>
         <p className={styles.panelText}>
-          Create multiple media items with shared service and publish settings while keeping speaker and thumbnail per row.
+          Create multiple media items with per-row service selections while keeping publish settings shared.
         </p>
         <div className={styles.inlineActions}>
           <Link className={styles.buttonSecondary} href="/admin/speakers">
@@ -425,17 +426,6 @@ export default function AdminBulkMediaPage() {
 
       <section className={styles.panel}>
         <form className={styles.formGrid} onSubmit={handleSubmit}>
-          <div className={styles.field}>
-            <label htmlFor="bulkService">Service</label>
-            <select id="bulkService" value={subcategory} onChange={(event) => setSubcategory(event.target.value)}>
-              {serviceOptions.map((serviceOption) => (
-                <option key={serviceOption} value={serviceOption}>
-                  {serviceOption}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div className={styles.field}>
             <label htmlFor="bulkPublish">Publish</label>
             <select
@@ -465,6 +455,7 @@ export default function AdminBulkMediaPage() {
               <thead>
                 <tr>
                   <th>Speaker</th>
+                  <th>Service</th>
                   <th>Title</th>
                   <th>Date</th>
                   <th>Thumbnail</th>
@@ -487,6 +478,20 @@ export default function AdminBulkMediaPage() {
                         {speakerOptions.map((speakerName) => (
                           <option key={speakerName} value={speakerName}>
                             {speakerName}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        className={styles.inlineInput}
+                        value={row.service}
+                        onChange={(event) => updateRow(row.id, { service: event.target.value })}
+                      >
+                        <option value="">Select service</option>
+                        {serviceOptions.map((serviceOption) => (
+                          <option key={serviceOption} value={serviceOption}>
+                            {serviceOption}
                           </option>
                         ))}
                       </select>
