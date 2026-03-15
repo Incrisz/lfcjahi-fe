@@ -151,7 +151,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       if (!item) {
         setStatus("Media item not found.");
         setCategory(fallbackCategory);
-        setSubcategory(getSubcategoryNames(nextCategoryTree, fallbackCategory)[0] || "");
+        setSubcategory(fallbackService);
         setIsReady(true);
         return;
       }
