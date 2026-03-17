@@ -28,6 +28,7 @@ import {
   hasApiBaseUrl,
   saveMediaItemApi,
 } from "../../lib/admin-api";
+import { parseMediaMetadataFromFilename } from "../../lib/media-filename";
 
 type AudioSourceMode = "link" | "file";
 
@@ -77,6 +78,46 @@ async function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(new Error("Failed to read file."));
     reader.readAsDataURL(file);
   });
+}
+
+function formatLongDate(value: string): string {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function ensurePastorLabel(value: string): string {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return "the pastor";
+  }
+
+  if (/^(pastor|pst|bishop|dr|rev|apostle|evang|evangelist|minister|dcn|deacon)\b/i.test(normalized)) {
+    return normalized;
+  }
+
+  return `Pastor ${normalized}`;
+}
+
+function buildAutoDescription(service: string, speaker: string, mediaDate: string): string {
+  const serviceText = service.trim() || "service";
+  const speakerText = ensurePastorLabel(speaker);
+  const dateText = formatLongDate(mediaDate) || mediaDate || "the scheduled date";
+
+  return `This is a ${serviceText} message by ${speakerText} preached on ${dateText}. Faith cometh by hearing and hearing, so listen and be blessed.`;
 }
 
 export default function AdminBulkMediaPage() {
@@ -187,6 +228,44 @@ export default function AdminBulkMediaPage() {
           : row,
       ),
     );
+  }
+
+  function applyAudioFilenameMetadata(row: BulkMediaRow, file: File | null) {
+    if (!file) {
+      updateRow(row.id, { audioFile: null });
+      return;
+    }
+
+    const parsed = parseMediaMetadataFromFilename(file.name, speakerOptions);
+    const patch: Partial<BulkMediaRow> = {
+      audioFile: file,
+    };
+
+    if (!row.title.trim() && parsed.title) {
+      patch.title = parsed.title;
+    }
+
+    if (!row.speaker.trim() && parsed.speaker) {
+      patch.speaker = parsed.speaker;
+    }
+
+    if (!row.service.trim() && parsed.service) {
+      patch.service = parsed.service;
+    }
+
+    if (!row.mediaDate.trim() && parsed.mediaDate) {
+      patch.mediaDate = parsed.mediaDate;
+    }
+
+    if (!row.description.trim() && (patch.title || patch.speaker || patch.service || patch.mediaDate)) {
+      patch.description = buildAutoDescription(
+        patch.service || row.service,
+        patch.speaker || row.speaker,
+        patch.mediaDate || row.mediaDate,
+      );
+    }
+
+    updateRow(row.id, patch);
   }
 
   function addRow() {
@@ -591,9 +670,7 @@ export default function AdminBulkMediaPage() {
                               type="file"
                               accept="audio/*"
                               onChange={(event) =>
-                                updateRow(row.id, {
-                                  audioFile: event.target.files?.[0] || null,
-                                })
+                                applyAudioFilenameMetadata(row, event.target.files?.[0] || null)
                               }
                             />
                             <label htmlFor={`bulk-audio-${row.id}`} className={styles.fileTrigger}>

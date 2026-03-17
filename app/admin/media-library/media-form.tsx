@@ -26,6 +26,7 @@ import {
   hasApiBaseUrl,
   saveMediaItemApi,
 } from "../lib/admin-api";
+import { parseMediaMetadataFromFilename } from "../lib/media-filename";
 
 type AudioSourceMode = "link" | "file";
 
@@ -55,6 +56,46 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function formatLongDate(value: string): string {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function ensurePastorLabel(value: string): string {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return "the pastor";
+  }
+
+  if (/^(pastor|pst|bishop|dr|rev|apostle|evang|evangelist|minister|dcn|deacon)\b/i.test(normalized)) {
+    return normalized;
+  }
+
+  return `Pastor ${normalized}`;
+}
+
+function buildAutoDescription(service: string, speaker: string, mediaDate: string): string {
+  const serviceText = service.trim() || "service";
+  const speakerText = ensurePastorLabel(speaker);
+  const dateText = formatLongDate(mediaDate) || mediaDate || "the scheduled date";
+
+  return `This is a ${serviceText} message by ${speakerText} preached on ${dateText}. Faith cometh by hearing and hearing, so listen and be blessed.`;
+}
+
 export default function MediaForm({ mediaId }: MediaFormProps) {
   const router = useRouter();
   const isEditing = Boolean(mediaId);
@@ -65,6 +106,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [status, setStatus] = useState("");
+  const [filenameAssist, setFilenameAssist] = useState("");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -80,6 +122,13 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
   const [category, setCategory] = useState<MediaCategory>("");
   const [subcategory, setSubcategory] = useState("");
   const [isPublished, setIsPublished] = useState(true);
+  const [manuallyEdited, setManuallyEdited] = useState({
+    title: false,
+    description: false,
+    speaker: false,
+    mediaDate: false,
+    subcategory: false,
+  });
 
   // Ensure audioLink is always a string to prevent controlled/uncontrolled input issues
   const setAudioLink = (value: string | ((prev: string) => string)) => {
@@ -143,6 +192,13 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       if (!mediaId) {
         setCategory(fallbackCategory);
         setSubcategory(fallbackService);
+        setManuallyEdited({
+          title: false,
+          description: false,
+          speaker: false,
+          mediaDate: false,
+          subcategory: false,
+        });
         setIsReady(true);
         return;
       }
@@ -152,6 +208,13 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
         setStatus("Media item not found.");
         setCategory(fallbackCategory);
         setSubcategory(fallbackService);
+        setManuallyEdited({
+          title: false,
+          description: false,
+          speaker: false,
+          mediaDate: false,
+          subcategory: false,
+        });
         setIsReady(true);
         return;
       }
@@ -181,6 +244,14 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
       setCategory(itemCategory);
       setSubcategory(itemSubcategory);
       setIsPublished(item.isPublished !== false);
+      setFilenameAssist("");
+      setManuallyEdited({
+        title: Boolean(asString(item.title).trim()),
+        description: Boolean(asString(item.description).trim()),
+        speaker: Boolean(asString(item.speaker).trim()),
+        mediaDate: Boolean(asString(item.mediaDate).trim()),
+        subcategory: Boolean(itemSubcategory.trim()),
+      });
       setIsReady(true);
     }
 
@@ -209,6 +280,49 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
   const speakerImageUrl = useMemo(() => getSpeakerImageUrl(speakers, speaker), [speaker, speakers]);
   const resolvedThumbnailPreviewUrl = thumbnailPreviewUrl || existingThumbnailUrl || speakerImageUrl;
 
+  function applyAudioFilenameMetadata(file: File | null) {
+    if (!file) {
+      setFilenameAssist("");
+      return;
+    }
+
+    const parsed = parseMediaMetadataFromFilename(file.name, speakerOptions);
+    const detectedFields: string[] = [];
+    const nextDescription = buildAutoDescription(parsed.service, parsed.speaker, parsed.mediaDate);
+
+    if (!manuallyEdited.title && !title.trim() && parsed.title) {
+      setTitle(parsed.title);
+      detectedFields.push("title");
+    }
+
+    if (!manuallyEdited.speaker && !speaker.trim() && parsed.speaker) {
+      setSpeaker(parsed.speaker);
+      detectedFields.push("speaker");
+    }
+
+    if (!manuallyEdited.subcategory && parsed.service) {
+      setSubcategory(parsed.service);
+      detectedFields.push("service");
+    }
+
+    if (!manuallyEdited.mediaDate && !mediaDate.trim() && parsed.mediaDate) {
+      setMediaDate(parsed.mediaDate);
+      detectedFields.push("date");
+    }
+
+    if (!manuallyEdited.description && !description.trim() && detectedFields.length > 0) {
+      setDescription(nextDescription);
+      detectedFields.push("description");
+    }
+
+    if (detectedFields.length === 0) {
+      setFilenameAssist("Audio file selected. Existing values were kept, so no autofill was applied.");
+      return;
+    }
+
+    setFilenameAssist(`Auto-filled ${detectedFields.join(", ")} from "${file.name}".`);
+  }
+
   async function handleThumbnailFileSelection(file: File | null) {
     setThumbnailFile(file);
 
@@ -229,6 +343,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
     event.preventDefault();
     if (isSaving) return;
     setStatus("");
+    setFilenameAssist("");
     setUploadProgress(0);
     setIsSaving(true);
 
@@ -409,7 +524,10 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <input
               id="mediaTitle"
               value={title || ""}
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setManuallyEdited((current) => ({ ...current, title: true }));
+              }}
               placeholder="Enter media title"
               required
             />
@@ -420,7 +538,10 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <select
               id="mediaSpeaker"
               value={speaker || ""}
-              onChange={(event) => setSpeaker(event.target.value)}
+              onChange={(event) => {
+                setSpeaker(event.target.value);
+                setManuallyEdited((current) => ({ ...current, speaker: true }));
+              }}
             >
               <option value="">No speaker</option>
               {speakerOptions.map((speakerOption) => (
@@ -433,7 +554,14 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
 
           <div className={styles.field}>
             <label htmlFor="mediaService">Service</label>
-            <select id="mediaService" value={subcategory || ""} onChange={(event) => setSubcategory(event.target.value)}>
+            <select
+              id="mediaService"
+              value={subcategory || ""}
+              onChange={(event) => {
+                setSubcategory(event.target.value);
+                setManuallyEdited((current) => ({ ...current, subcategory: true }));
+              }}
+            >
               {serviceOptions.map((serviceOption) => (
                 <option key={serviceOption} value={serviceOption}>
                   {serviceOption}
@@ -448,7 +576,10 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
               id="mediaDate"
               type="date"
               value={mediaDate || ""}
-              onChange={(event) => setMediaDate(event.target.value)}
+              onChange={(event) => {
+                setMediaDate(event.target.value);
+                setManuallyEdited((current) => ({ ...current, mediaDate: true }));
+              }}
             />
           </div>
 
@@ -469,7 +600,10 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
             <textarea
               id="mediaDescription"
               value={description || ""}
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={(event) => {
+                setDescription(event.target.value);
+                setManuallyEdited((current) => ({ ...current, description: true }));
+              }}
               placeholder="Write a short description"
             />
           </div>
@@ -560,6 +694,7 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
                     onChange={(event) => {
                       const file = event.target.files?.[0] || null;
                       setAudioFile(file);
+                      applyAudioFilenameMetadata(file);
                     }}
                   />
                   <label htmlFor="audioFile" className={styles.fileTrigger}>
@@ -567,7 +702,10 @@ export default function MediaForm({ mediaId }: MediaFormProps) {
                   </label>
 
                   {audioFile ? (
-                    <p className={styles.fileName}>{audioFile.name}</p>
+                    <>
+                      <p className={styles.fileName}>{audioFile.name}</p>
+                      {filenameAssist ? <p className={styles.uploadSubtext}>{filenameAssist}</p> : null}
+                    </>
                   ) : existingMediaUrl ? (
                     <p className={styles.uploadSubtext}>Current audio file is already attached.</p>
                   ) : (

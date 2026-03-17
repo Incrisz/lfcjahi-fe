@@ -53,9 +53,7 @@ const navItems: NavItem[] = [
   { href: "/admin/media-library", label: "Media Library" },
   { href: "/admin/districts", label: "Districts" },
   { href: "/admin/home-cells", label: "Home Cells" },
-  { href: "/admin/categories", label: "Categories" },
   { href: "/admin/speakers", label: "Speakers" },
-  { href: "/admin/events", label: "Events" },
   // { href: "/admin/theme-settings", label: "Theme Settings" },
 ];
 

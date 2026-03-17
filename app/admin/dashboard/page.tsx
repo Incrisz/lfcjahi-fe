@@ -45,12 +45,12 @@ export default function AdminDashboardPage() {
     const videos = mediaItems.filter((item) => item.category === "Videos").length;
     const audios = mediaItems.filter((item) => item.category === "Audio").length;
     const photos = mediaItems.filter((item) => item.category === "Photos").length;
-    const downloads = mediaItems.filter((item) => item.category === "Downloads").length;
+    const totalDownloads = mediaItems.reduce((sum, item) => sum + (Number(item.downloadCount) || 0), 0);
     return {
       videos,
       audios,
       photos,
-      downloads,
+      totalDownloads,
       events: events.length,
     };
   }, [events.length, mediaItems]);
@@ -73,8 +73,8 @@ export default function AdminDashboardPage() {
           <h3 className={styles.statValue}>{stats.photos}</h3>
         </article>
         <article className={styles.statCard}>
-          <p className={styles.statLabel}>Downloads</p>
-          <h3 className={styles.statValue}>{stats.downloads}</h3>
+          <p className={styles.statLabel}>Total Downloads</p>
+          <h3 className={styles.statValue}>{stats.totalDownloads.toLocaleString()}</h3>
         </article>
         <article className={styles.statCard}>
           <p className={styles.statLabel}>Events</p>
