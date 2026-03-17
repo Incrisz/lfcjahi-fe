@@ -533,20 +533,73 @@ export default function AdminBulkMediaPage() {
             <table className={styles.table}>
               <thead>
                 <tr>
+                  {isAudioCategory(category) ? <th>Source</th> : null}
+                  {isAudioCategory(category) ? <th>Audio Link / File</th> : null}
                   <th>Speaker</th>
                   <th>Service</th>
                   <th>Title</th>
                   <th>Date</th>
                   <th>Thumbnail</th>
                   <th>Description</th>
-                  {isAudioCategory(category) ? <th>Source</th> : null}
-                  {isAudioCategory(category) ? <th>Audio Link / File</th> : null}
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, index) => (
                   <tr key={row.id}>
+                    {isAudioCategory(category) ? (
+                      <td>
+                        <div className={styles.toggleGroup}>
+                          <button
+                            type="button"
+                            className={`${styles.toggleButton} ${
+                              row.audioSourceMode === "link" ? styles.toggleButtonActive : ""
+                            }`}
+                            onClick={() => updateRow(row.id, { audioSourceMode: "link", audioFile: null })}
+                          >
+                            Link
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.toggleButton} ${
+                              row.audioSourceMode === "file" ? styles.toggleButtonActive : ""
+                            }`}
+                            onClick={() => updateRow(row.id, { audioSourceMode: "file", audioLink: "" })}
+                          >
+                            File
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
+                    {isAudioCategory(category) ? (
+                      <td>
+                        {row.audioSourceMode === "link" ? (
+                          <input
+                            className={styles.inlineInput}
+                            value={row.audioLink}
+                            onChange={(event) => updateRow(row.id, { audioLink: event.target.value })}
+                            placeholder="https://.../message.mp3"
+                            style={{ minWidth: 260 }}
+                          />
+                        ) : (
+                          <div className={styles.uploadCard} style={{ minWidth: 260 }}>
+                            <input
+                              id={`bulk-audio-${row.id}`}
+                              className={styles.hiddenFileInput}
+                              type="file"
+                              accept="audio/*"
+                              onChange={(event) =>
+                                applyAudioFilenameMetadata(row, event.target.files?.[0] || null)
+                              }
+                            />
+                            <label htmlFor={`bulk-audio-${row.id}`} className={styles.fileTrigger}>
+                              Choose Audio File
+                            </label>
+                            <p className={styles.fileName}>{row.audioFile ? row.audioFile.name : "No file selected"}</p>
+                          </div>
+                        )}
+                      </td>
+                    ) : null}
                     <td>
                       <select
                         className={styles.inlineInput}
@@ -628,59 +681,6 @@ export default function AdminBulkMediaPage() {
                         style={{ minWidth: 260, minHeight: 84 }}
                       />
                     </td>
-                    {isAudioCategory(category) ? (
-                      <td>
-                        <div className={styles.toggleGroup}>
-                          <button
-                            type="button"
-                            className={`${styles.toggleButton} ${
-                              row.audioSourceMode === "link" ? styles.toggleButtonActive : ""
-                            }`}
-                            onClick={() => updateRow(row.id, { audioSourceMode: "link", audioFile: null })}
-                          >
-                            Link
-                          </button>
-                          <button
-                            type="button"
-                            className={`${styles.toggleButton} ${
-                              row.audioSourceMode === "file" ? styles.toggleButtonActive : ""
-                            }`}
-                            onClick={() => updateRow(row.id, { audioSourceMode: "file", audioLink: "" })}
-                          >
-                            File
-                          </button>
-                        </div>
-                      </td>
-                    ) : null}
-                    {isAudioCategory(category) ? (
-                      <td>
-                        {row.audioSourceMode === "link" ? (
-                          <input
-                            className={styles.inlineInput}
-                            value={row.audioLink}
-                            onChange={(event) => updateRow(row.id, { audioLink: event.target.value })}
-                            placeholder="https://.../message.mp3"
-                            style={{ minWidth: 260 }}
-                          />
-                        ) : (
-                          <div className={styles.uploadCard} style={{ minWidth: 260 }}>
-                            <input
-                              id={`bulk-audio-${row.id}`}
-                              className={styles.hiddenFileInput}
-                              type="file"
-                              accept="audio/*"
-                              onChange={(event) =>
-                                applyAudioFilenameMetadata(row, event.target.files?.[0] || null)
-                              }
-                            />
-                            <label htmlFor={`bulk-audio-${row.id}`} className={styles.fileTrigger}>
-                              Choose Audio File
-                            </label>
-                            <p className={styles.fileName}>{row.audioFile ? row.audioFile.name : "No file selected"}</p>
-                          </div>
-                        )}
-                      </td>
-                    ) : null}
                     <td>
                       <div className={styles.listActions}>
                         <button type="button" className={styles.buttonDanger} onClick={() => removeRow(row.id)}>
